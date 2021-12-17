@@ -79,7 +79,7 @@ diff_pval_wilcox <- sapply(unique(dat[["Compound"]]), function(ith_cmp) {
 
 ```{r, results='asis', fig.align='center', fig.height=6, fig.width=10, warning=FALSE, message=FALSE, echo=FALSE}
 
-headers <- unique(dat[["Compound"]])[1:4]
+headers <- unique(dat[["Compound"]])
 for (i in 1:length(headers)){
   cat("# Compound", headers[[i]], "\n")
   
