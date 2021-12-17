@@ -9,7 +9,7 @@ ui <- fluidPage(
   mainPanel(
     tabsetPanel(
       tabPanel("Data", 
-               fileInput("data", "Choice file .xlsx:",
+               fileInput("data", "Choose .xlsx file:",
                          multiple = FALSE,
                          accept = c(".xlsx")),
                h3("Selected:"),
@@ -162,3 +162,4 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui, server)
+
