@@ -20,7 +20,7 @@ ui <- fluidPage(
                       selectInput("compound", "Select compound:", 
                                   choices = NULL),
                       h3("Normality"),
-                      "Shapiro-wilk test:",
+                      "Shapiro-Wilk Normality Test:",
                       tableOutput("shapiro"),
                       h3("Between groups comprison"),
                       "T-test:",
@@ -121,7 +121,7 @@ server <- function(input, output, session) {
         data.frame(group_label = ith_group, pval = .)
     }) %>%
       bind_rows() %>%
-      mutate(apval = p.adjust(pval, method = "BH"))
+      mutate(adjusted_pval = p.adjust(pval, method = "BH"))
   })
   
   output[["shapiro"]] <- renderTable({
@@ -137,7 +137,7 @@ server <- function(input, output, session) {
       t.test(value ~ group_label, data = .) %>% 
       getElement("p.value") %>% 
       data.frame(pval = .) %>% 
-      mutate(apval = p.adjust(pval, method = "BH"))
+      mutate(adjusted_pval = p.adjust(pval, method = "BH"))
   })
   
   output[["ttest"]] <- renderTable({
@@ -153,12 +153,54 @@ server <- function(input, output, session) {
       wilcox.test(value ~ group_label, data = .) %>% 
       getElement("p.value") %>% 
       data.frame(pval = .) %>% 
-      mutate(apval = p.adjust(pval, method = "BH"))
+      mutate(adjusted_pval = p.adjust(pval, method = "BH"))
   })
   
   output[["wilcoxon"]] <- renderTable({
     wilcoxon_res()
   })
+  
+  
+  output[["download_all"]] <- downloadHandler(
+    filename = "report_all.pdf",
+    content = function(file) {
+
+      tempReport <- file.path(tempdir(), "report_all.Rmd")
+      file.copy("report_all.Rmd", tempReport, overwrite = TRUE)
+
+      # Set up parameters to pass to Rmd document
+      params <- list(data = data_selected())
+
+      rmarkdown::render(tempReport, output_file = file,
+                        params = params,
+                        envir = new.env(parent = globalenv())
+      )
+    }
+  )
+  
+  output[["download_one_compound"]] <- downloadHandler(
+    filename = paste0(compound(), "_report.pdf"),
+    content = function(file) {
+      
+      tempReport <- file.path(tempdir(), "report_one.Rmd")
+      file.copy("report_one.Rmd", tempReport, overwrite = TRUE)
+      
+      # Set up parameters to pass to Rmd document
+      params <- list(data = data_one_cmp(),
+                     plot = plot_out(),
+                     shapiro = shapiro_res(),
+                     ttest = ttest_res(),
+                     wilcoxon = wilcoxon_res())
+      
+      rmarkdown::render(tempReport, output_file = file,
+                        params = params,
+                        envir = new.env(parent = globalenv())
+      )
+    }
+  )
+  
+  
+  
 }
 
 shinyApp(ui, server)
