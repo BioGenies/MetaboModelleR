@@ -4,6 +4,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(patchwork)
+library(DT)
 
 ui <- fluidPage(
   mainPanel(
@@ -14,6 +15,12 @@ ui <- fluidPage(
                          accept = c(".xlsx")),
                h3("Selected:"),
                tableOutput("data_selected")
+      ),
+      tabPanel("Groups", 
+               actionButton(inputId = "change_group_btn", 
+                            label = "Press the button to change the group name"), 
+               DT::dataTableOutput("group_dt"),
+               verbatimTextOutput("debug")
       ),
       tabPanel("Analysis", 
                column(4,
@@ -42,6 +49,26 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   
+  rv_df <- reactiveValues()
+  
+  output[["group_dt"]] <- DT::renderDataTable({
+    rv_df[["group_df"]] %>% 
+      datatable(editable = FALSE, options = list(paging = FALSE))
+  })
+  
+  observeEvent(data_selected(), {
+    rv_df[["group_df"]] <- data.frame(sample_name = setdiff(colnames(data_selected()), "Compound")) %>% 
+        mutate(group = "A")
+  })
+  
+  observeEvent(input[["change_group_btn"]], {
+    rv_df[["group_df"]][input[["group_dt_rows_selected"]], "group"] <- "B"
+  })
+  
+  output[["debug"]] <- renderPrint({
+    input[["group_dt_rows_selected"]]
+  })
+  
   data_selected <- reactive({
     file <- input[["data"]]
     ext <- tools::file_ext(file[["datapath"]])
@@ -51,6 +78,7 @@ server <- function(input, output, session) {
     
     read_excel(file[["datapath"]])
   })
+  
   
   output[["data_selected"]] <- renderTable({
     head(data_selected())
@@ -67,7 +95,7 @@ server <- function(input, output, session) {
       filter(Compound == compound())
   })
   
-
+  
   observe({
     dat <- data_selected() 
     
@@ -164,13 +192,13 @@ server <- function(input, output, session) {
   output[["download_all"]] <- downloadHandler(
     filename = "report_all.pdf",
     content = function(file) {
-
+      
       tempReport <- file.path(tempdir(), "report_all.Rmd")
       file.copy("report_all.Rmd", tempReport, overwrite = TRUE)
-
+      
       # Set up parameters to pass to Rmd document
       params <- list(data = data_selected())
-
+      
       rmarkdown::render(tempReport, output_file = file,
                         params = params,
                         envir = new.env(parent = globalenv())
