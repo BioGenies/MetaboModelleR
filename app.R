@@ -5,6 +5,7 @@ library(tidyr)
 library(ggplot2)
 library(patchwork)
 library(DT)
+library(shinycssloaders)
 
 ui <- fluidPage(
   mainPanel(
@@ -17,31 +18,47 @@ ui <- fluidPage(
                tableOutput("data_selected")
       ),
       tabPanel("Groups", 
-               actionButton(inputId = "change_group_btn", 
-                            label = "Press the button to change the group name"), 
-               DT::dataTableOutput("group_dt"),
-               verbatimTextOutput("debug")
+               br(),
+               column(5, 
+                      h3("You can change group name here:"),
+                      h5("1. Select rows from the table."),
+                      textInput("change_group_txt", 
+                                label = "2. Type the group name here"),
+                      actionButton(inputId = "change_group_btn", 
+                                   label = "3. Press the button to change the group name"),
+                      br(),
+                      br(),
+                      h5("Check if groups are paired:"),
+                      checkboxInput("paired", "Paired", FALSE)),
+               column(7, 
+                      DT::dataTableOutput("group_dt"),
+                      verbatimTextOutput("debug"))
+               
       ),
       tabPanel("Analysis", 
-               column(4,
+               column(6,
                       selectInput("compound", "Select compound:", 
                                   choices = NULL),
                       h3("Normality"),
                       "Shapiro-Wilk Normality Test:",
-                      tableOutput("shapiro"),
+                      withSpinner(tableOutput("shapiro")),
                       h3("Between groups comprison"),
-                      "T-test:",
-                      tableOutput("ttest"),
-                      "Wilcoxon signed-rank test:",
-                      tableOutput("wilcoxon")
+                      withSpinner(tableOutput("tests"))
                ),
-               column(8,
-                      plotOutput("dist_plot"),
+               column(6,
+                      withSpinner(plotOutput("dist_plot")),
                       downloadButton("download_png", "Download png")
                )
       ),
-      tabPanel("Download pdf",
-               downloadButton("download_one_compound", "Download analysis for selected compound."),
+      tabPanel("Download report",
+               h3("You can download a PDF file with the analysis."),
+               br(),
+               h5("For one compound:"),
+               downloadButton("download_one_compound", 
+                              "Download analysis for selected compound."),
+               br(),
+               br(),
+               h5("For all compounds from the file (It can take even a few minutes):"),
                downloadButton("download_all", "Download all"))
     )
   )
@@ -58,11 +75,11 @@ server <- function(input, output, session) {
   
   observeEvent(data_selected(), {
     rv_df[["group_df"]] <- data.frame(sample_name = setdiff(colnames(data_selected()), "Compound")) %>% 
-        mutate(group = "A")
+      mutate(group = "A")
   })
   
   observeEvent(input[["change_group_btn"]], {
-    rv_df[["group_df"]][input[["group_dt_rows_selected"]], "group"] <- "B"
+    rv_df[["group_df"]][input[["group_dt_rows_selected"]], "group"] <- input[["change_group_txt"]]
   })
   
   output[["debug"]] <- renderPrint({
@@ -84,18 +101,6 @@ server <- function(input, output, session) {
     head(data_selected())
   })
   
-  compound <- reactive({
-    input[["compound"]]
-  })
-  
-  data_one_cmp <- reactive({
-    raw_dat <- data_selected()
-    pivot_longer(data = raw_dat, cols = -Compound) %>% 
-      mutate(group_label = substr(name, 0, 2)) %>% 
-      filter(Compound == compound())
-  })
-  
-  
   observe({
     dat <- data_selected() 
     
@@ -103,8 +108,23 @@ server <- function(input, output, session) {
                       choices = unique(dat[["Compound"]]))
   })
   
+  
+  #Analysis
+  
+  data_prepared <- reactive({
+    raw_dat <- data_selected()
+    pivot_longer(data = raw_dat, cols = -Compound) %>% 
+      group_by(Compound) %>% 
+      mutate(group_label = rv_df[["group_df"]][["group"]])
+  })
+  
+  
+  
+  
   plot_out <- reactive({
-    dat <- data_one_cmp()
+    dat <- data_prepared() %>% 
+      filter(Compound == input[["compound"]])
+    
     group_label <- unique(dat[["group_label"]])
     cmp <- unique(dat[["Compound"]])
     
@@ -118,7 +138,7 @@ server <- function(input, output, session) {
       stat_qq_line() +
       ggtitle("Quantile-quantile chart")
     
-    boxplot <- ggplot(dat, aes(x="", y = value, fill = group_label)) +
+    boxplot <- ggplot(dat, aes(x = "", y = value, fill = group_label)) +
       geom_boxplot() +
       ggtitle("Boxplot")
     
@@ -131,61 +151,110 @@ server <- function(input, output, session) {
   })
   
   
-  output[["download_png"]] <- downloadHandler(filename = paste0(compound(), "_plot.png"),
+  output[["download_png"]] <- downloadHandler(filename = paste0(input[["compound"]], 
+                                                                "_plot.png"),
                                               content = function(file){
-                                                ggsave(file, plot_out(), device = "png", height = 300,
-                                                       width = 400, units = "mm")})
+                                                ggsave(file, 
+                                                       plot_out(), 
+                                                       device = "png", 
+                                                       height = 300,
+                                                       width = 400, 
+                                                       units = "mm")})
   
   shapiro_res <- reactive({
-    dat <- data_one_cmp()
+    
+    dat <- data_prepared()
     
     group_label <- unique(dat[["group_label"]])
+    compound <- unique(unique(dat[["Compound"]]))
     
     lapply(group_label, function(ith_group) {
-      filter(dat, group_label == ith_group) %>%
-        pull(value) %>%
-        shapiro.test() %>%
-        getElement("p.value") %>%
-        data.frame(group_label = ith_group, pval = .)
+      lapply(compound, function(ith_compound) {
+        dat %>% 
+          filter(group_label == ith_group, Compound == ith_compound) %>%
+          pull(value) %>%
+          shapiro.test() %>%
+          getElement("p.value") %>%
+          data.frame(group_label = ith_group, 
+                     Compound = ith_compound, 
+                     pval = .)
+      }) %>% bind_rows()
     }) %>%
       bind_rows() %>%
+      group_by(group_label) %>% 
       mutate(adjusted_pval = p.adjust(pval, method = "BH"))
+  })
+  
+  shapiro_out <- reactive({
+    shapiro_res() %>% 
+      filter(Compound == input[["compound"]]) %>% 
+      select(-Compound)
   })
   
   output[["shapiro"]] <- renderTable({
-    shapiro_res()
+    shapiro_out()
   })
   
-  ttest_res <- reactive({
-    dat <- data_one_cmp()
+  comparison_tests <- reactive({
+    dat <- data_prepared()
     
-    group_label <- unique(dat[["group_label"]])
+    cmp <- unique(unique(dat[["Compound"]]))
     
-    dat %>% 
-      t.test(value ~ group_label, data = .) %>% 
-      getElement("p.value") %>% 
-      data.frame(pval = .) %>% 
-      mutate(adjusted_pval = p.adjust(pval, method = "BH"))
+    is_paired <- input[["paired"]]
+    
+    if(length(unique(dat[["group_label"]])) == 1) {
+      "For between group comparison you need to set at least two groups."
+      
+    } else {
+      if(is_paired & (length(unique(table(dat[["group_label"]]))) != 1)) {
+        
+        return("For pairwise comparison groups need to be equinumerous.")
+        
+      } else {
+        lapply(cmp, function(ith_compound) {
+          rbind(dat %>% 
+                  filter(Compound == ith_compound) %>%
+                  t.test(value ~ group_label, 
+                         data = .,
+                         paired = is_paired) %>% 
+                  getElement("p.value") %>% 
+                  data.frame(test = "T-test",
+                             Compound = ith_compound, 
+                             pval = .),
+                dat %>% 
+                  filter(Compound == ith_compound) %>%
+                  wilcox.test(value ~ group_label, 
+                              data = .,
+                              paired = is_paired) %>% 
+                  getElement("p.value") %>% 
+                  data.frame(test = "Wilcoxon signed-rank test",
+                             Compound = ith_compound, 
+                             pval = .))
+        }) %>% 
+          bind_rows() %>%
+          group_by(test) %>% 
+          mutate(adjusted_pval = p.adjust(pval, method = "BH"))
+      }
+    }
   })
   
-  output[["ttest"]] <- renderTable({
-    ttest_res()
+  comparison_out <- reactive({
+    
+    if(is.data.frame(comparison_tests())) {
+      
+      comparison_tests() %>% 
+        filter(Compound == input[["compound"]]) %>% 
+        mutate(paired = input[["paired"]]) %>% 
+        select(-Compound)
+    } else {
+      
+      comparison_tests()
+    }
   })
   
-  wilcoxon_res <- reactive({
-    dat <- data_one_cmp()
-    
-    group_label <- unique(dat[["group_label"]])
-    
-    dat %>% 
-      wilcox.test(value ~ group_label, data = .) %>% 
-      getElement("p.value") %>% 
-      data.frame(pval = .) %>% 
-      mutate(adjusted_pval = p.adjust(pval, method = "BH"))
-  })
   
-  output[["wilcoxon"]] <- renderTable({
-    wilcoxon_res()
+  output[["tests"]] <- renderTable({
+    comparison_out()
   })
   
   
@@ -197,7 +266,9 @@ server <- function(input, output, session) {
       file.copy("report_all.Rmd", tempReport, overwrite = TRUE)
       
       # Set up parameters to pass to Rmd document
-      params <- list(data = data_selected())
+      params <- list(data = data_prepared(),
+                     shapiro = shapiro_res(),
+                     tests = comparison_tests())
       
       rmarkdown::render(tempReport, output_file = file,
                         params = params,
@@ -207,18 +278,18 @@ server <- function(input, output, session) {
   )
   
   output[["download_one_compound"]] <- downloadHandler(
-    filename = paste0(compound(), "_report.pdf"),
+    filename = paste0(input[["compound"]], "_report.pdf"),
     content = function(file) {
       
       tempReport <- file.path(tempdir(), "report_one.Rmd")
       file.copy("report_one.Rmd", tempReport, overwrite = TRUE)
       
       # Set up parameters to pass to Rmd document
-      params <- list(data = data_one_cmp(),
+      params <- list(data = filter(data_prepared(), 
+                                   Compound == input[["compound"]]),
                      plot = plot_out(),
-                     shapiro = shapiro_res(),
-                     ttest = ttest_res(),
-                     wilcoxon = wilcoxon_res())
+                     shapiro = shapiro_out(),
+                     tests = comparison_out())
       
       rmarkdown::render(tempReport, output_file = file,
                         params = params,

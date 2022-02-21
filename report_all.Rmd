@@ -2,12 +2,13 @@
 output: pdf_document
 params:
   data: NA
+  shapiro: NA
+  tests: NA
 ---
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
 
 library(knitr)
-library(readxl)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
@@ -16,24 +17,9 @@ library(patchwork)
 library(xtable)
 options(xtable.comment = FALSE)
 
-
-dat <- pivot_longer(data = params[["data"]], cols = -Compound) %>% 
-  mutate(group_label = substr(name, 0, 2))
+dat <- params[["data"]]
 
 group_label <- unique(dat[["group_label"]])
-
-shp_pval <- lapply(unique(dat[["Compound"]]), function(ith_cmp) {
-  lapply(group_label, function(ith_group) {
-    filter(dat, Compound == ith_cmp, group_label == ith_group) %>% 
-      pull(value) %>% 
-      shapiro.test() %>% 
-      getElement("p.value") %>% 
-      data.frame(Compound = ith_cmp, group_label = ith_group, pval = .)
-  }) %>% 
-    bind_rows()
-}) %>% 
-  bind_rows() %>% 
-  mutate(apval = p.adjust(pval, method = "BH"))
 
 dist_plot <- lapply(unique(dat[["Compound"]]), function(ith_cmp) {
   part_dat <- filter(dat, Compound == ith_cmp)
@@ -56,22 +42,9 @@ dist_plot <- lapply(unique(dat[["Compound"]]), function(ith_cmp) {
 })
 
 
-diff_pval_t <- sapply(unique(dat[["Compound"]]), function(ith_cmp) {
-  filter(dat, Compound == ith_cmp) %>% 
-    t.test(value ~ group_label, data = .) %>% 
-    getElement("p.value")
-}, USE.NAMES = FALSE) %>% 
-  data.frame(Compound = unique(dat[["Compound"]]), pval = .) %>% 
-  mutate(apval = p.adjust(pval, method = "BH"))
+shapiro <- params[["shapiro"]]
+tests <- params[["tests"]]
 
-
-diff_pval_wilcox <- sapply(unique(dat[["Compound"]]), function(ith_cmp) {
-  filter(dat, Compound == ith_cmp) %>% 
-    wilcox.test(value ~ group_label, data = .) %>% 
-    getElement("p.value")
-}, USE.NAMES = FALSE) %>% 
-  data.frame(Compound = unique(dat[["Compound"]]), pval = .) %>% 
-  mutate(apval = p.adjust(pval, method = "BH"))
 
 ```
 
@@ -89,18 +62,13 @@ for (i in 1:length(headers)){
   
   cat("#### Shapiro-Wilk Normality Test \n")
   
-  print(kable(filter(shp_pval, Compound == headers[[i]])))
+  print(kable(filter(shapiro, Compound == headers[[i]])))
   
   
   cat("## Between groups comparison \n")
   
-  cat("#### T-test: \n ")
   
-  print(kable(filter(diff_pval_t, Compound == headers[[i]])))
-  
-  cat("#### Wilcoxon signed-rank test:\n")
-  
-  print(kable(filter(diff_pval_wilcox, Compound == headers[[i]])))
+  print(kable(filter(tests, Compound == headers[[i]])))
   
   cat("\\newpage")
   

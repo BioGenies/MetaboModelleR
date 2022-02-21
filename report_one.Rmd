@@ -4,8 +4,7 @@ params:
   data: NA
   plot: NA
   shapiro: NA
-  ttest: NA
-  wilcoxon: NA
+  tests: NA
 ---
 
 ```{r setup, include=FALSE}
@@ -28,14 +27,9 @@ library(knitr)
   
   
   cat("## Between groups comparison \n")
+
   
-  cat("#### T-test: \n ")
-  
-  print(kable(params[["ttest"]]))
-  
-  cat("#### Wilcoxon signed-rank test:\n")
-  
-  print(kable(params[["wilcoxon"]]))
+  print(kable(params[["tests"]]))
   
 
 ```
