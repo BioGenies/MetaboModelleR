@@ -1,4 +1,3 @@
-library(shiny)
 library(readxl)
 library(dplyr)
 library(tidyr)
@@ -6,63 +5,7 @@ library(ggplot2)
 library(patchwork)
 library(DT)
 library(shinycssloaders)
-
-ui <- fluidPage(
-  mainPanel(
-    tabsetPanel(
-      tabPanel("Data", 
-               fileInput("data", "Choose .xlsx file:",
-                         multiple = FALSE,
-                         accept = c(".xlsx")),
-               h3("Selected:"),
-               tableOutput("data_selected")
-      ),
-      tabPanel("Groups", 
-               br(),
-               column(5, 
-                      h3("You can change group name here:"),
-                      h5("1. Select rows from the table."),
-                      textInput("change_group_txt", 
-                                label = "2. Type the group name here"),
-                      actionButton(inputId = "change_group_btn", 
-                                   label = "3. Press the button to change the group name"),
-                      br(),
-                      br(),
-                      h5("Check if groups are paired:"),
-                      checkboxInput("paired", "Paired", FALSE)),
-               column(7, 
-                      DT::dataTableOutput("group_dt"),
-                      verbatimTextOutput("debug"))
-               
-      ),
-      tabPanel("Analysis", 
-               column(6,
-                      selectInput("compound", "Select compound:", 
-                                  choices = NULL),
-                      h3("Normality"),
-                      "Shapiro-Wilk Normality Test:",
-                      withSpinner(tableOutput("shapiro")),
-                      h3("Between groups comprison"),
-                      withSpinner(tableOutput("tests"))
-               ),
-               column(6,
-                      withSpinner(plotOutput("dist_plot")),
-                      downloadButton("download_png", "Download png")
-               )
-      ),
-      tabPanel("Download report",
-               h3("You can download a PDF file with the analysis."),
-               br(),
-               h5("For one compound:"),
-               downloadButton("download_one_compound", 
-                              "Download analysis for selected compound."),
-               br(),
-               br(),
-               h5("For all compounds from the file (It can take even a few minutes):"),
-               downloadButton("download_all", "Download all"))
-    )
-  )
-)
+source("ui.R")
 
 server <- function(input, output, session) {
   
@@ -70,16 +13,19 @@ server <- function(input, output, session) {
   
   output[["group_dt"]] <- DT::renderDataTable({
     rv_df[["group_df"]] %>% 
-      datatable(editable = FALSE, options = list(paging = FALSE))
+      DT::datatable(editable = FALSE, options = list(paging = FALSE))
   })
   
   observeEvent(data_selected(), {
-    rv_df[["group_df"]] <- data.frame(sample_name = setdiff(colnames(data_selected()), "Compound")) %>% 
+    rv_df[["group_df"]] <- 
+      data.frame(sample_name = setdiff(colnames(data_selected()), 
+                                       "Compound")) %>% 
       mutate(group = "A")
   })
   
   observeEvent(input[["change_group_btn"]], {
-    rv_df[["group_df"]][input[["group_dt_rows_selected"]], "group"] <- input[["change_group_txt"]]
+    rv_df[["group_df"]][input[["group_dt_rows_selected"]], "group"] <- 
+      input[["change_group_txt"]]
   })
   
   output[["debug"]] <- renderPrint({
@@ -93,7 +39,7 @@ server <- function(input, output, session) {
     req(file)
     validate(need(ext == "xlsx", "Please upload a xlsx file"))
     
-    read_excel(file[["datapath"]])
+    readxl::read_excel(file[["datapath"]])
   })
   
   
@@ -119,8 +65,6 @@ server <- function(input, output, session) {
   })
   
   
-  
-  
   plot_out <- reactive({
     dat <- data_prepared() %>% 
       filter(Compound == input[["compound"]])
@@ -142,7 +86,9 @@ server <- function(input, output, session) {
       geom_boxplot() +
       ggtitle("Boxplot")
     
-    (hist + boxplot + qqplot)* facet_wrap(~ group_label, ncol = 1)* theme(legend.position = "bottom") + plot_annotation(paste0("Compound ", cmp))
+    (hist + boxplot + qqplot)* facet_wrap(~ group_label, ncol = 1)* 
+      theme(legend.position = "bottom") + 
+      plot_annotation(paste0("Compound ", cmp))
   })
   
   
@@ -151,15 +97,15 @@ server <- function(input, output, session) {
   })
   
   
-  output[["download_png"]] <- downloadHandler(filename = paste0(input[["compound"]], 
-                                                                "_plot.png"),
-                                              content = function(file){
-                                                ggsave(file, 
-                                                       plot_out(), 
-                                                       device = "png", 
-                                                       height = 300,
-                                                       width = 400, 
-                                                       units = "mm")})
+  output[["download_png"]] <- 
+    downloadHandler(filename = paste0(input[["compound"]], "_plot.png"),
+                    content = function(file){
+                      ggsave(file, 
+                             plot_out(), 
+                             device = "png", 
+                             height = 300,
+                             width = 400, 
+                             units = "mm")})
   
   shapiro_res <- reactive({
     
@@ -297,10 +243,4 @@ server <- function(input, output, session) {
       )
     }
   )
-  
-  
-  
 }
-
-shinyApp(ui, server)
-
