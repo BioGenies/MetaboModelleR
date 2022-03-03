@@ -35,7 +35,7 @@ ui <- fluidPage(
                       h3("Normality"),
                       "Shapiro-Wilk Normality Test:",
                       shinycssloaders::withSpinner(tableOutput("shapiro")),
-                      h3("Between groups comprison"),
+                      h3("Between groups comparison"),
                       shinycssloaders::withSpinner(tableOutput("tests"))
                ),
                column(6,
