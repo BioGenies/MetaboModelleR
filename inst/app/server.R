@@ -61,7 +61,8 @@ server <- function(input, output, session) {
     raw_dat <- data_selected()
     pivot_longer(data = raw_dat, cols = -Compound) %>% 
       group_by(Compound) %>% 
-      mutate(group_label = rv_df[["group_df"]][["group"]])
+      mutate(group_label = rv_df[["group_df"]][["group"]]) %>% 
+      mutate(value = as.numeric(value))
   })
   
   
@@ -187,7 +188,6 @@ server <- function(input, output, session) {
   comparison_out <- reactive({
     
     if(is.data.frame(comparison_tests())) {
-      
       comparison_tests() %>% 
         filter(Compound == input[["compound"]]) %>% 
         mutate(paired = input[["paired"]]) %>% 
@@ -243,4 +243,30 @@ server <- function(input, output, session) {
       )
     }
   )
+  
+  output[["shapiro_table"]] <- DT::renderDataTable({
+    datatable(data = shapiro_res(),
+              class = "table-bordered table-condensed",
+              extensions = "Buttons",
+              options = list(pageLength = 5,
+                             dom = "tBip",
+                             autoWidth = TRUE,
+                             buttons = c("excel", "csv")),
+              filter = "bottom",
+              rownames = FALSE)
+  })
+  
+  output[["tests_table"]] <- DT::renderDataTable({
+    datatable(data = comparison_tests(),
+              class = "table-bordered table-condensed",
+              extensions = "Buttons",
+              options = list(pageLength = 5,
+                             dom = "tBip",
+                             autoWidth = TRUE,
+                             buttons = c("excel", "csv")),
+              filter = "bottom",
+              rownames = FALSE)
+  })
+  
+  
 }

@@ -44,15 +44,26 @@ ui <- fluidPage(
                )
       ),
       tabPanel("Download report",
-               h3("You can download a PDF file with the analysis."),
-               br(),
+               h3("You can download a PDF file with the analysis"),
                h5("For one compound:"),
                downloadButton("download_one_compound", 
-                              "Download analysis for selected compound."),
+                              "Download analysis for selected compound"),
                br(),
                br(),
                h5("For all compounds from the file (It can take even a few minutes):"),
-               downloadButton("download_all", "Download all"))
+               downloadButton("download_all", "Download analysis for all compounds"),
+               br(),
+               br(),
+               h3("or you can download a table with the results for all compounds"),
+               h4("Normality"),
+               DT::dataTableOutput("shapiro_table"),
+               br(),
+               br(),
+               h4("Between groups comparison"),
+               DT::dataTableOutput("tests_table")
+
+
+      )
     )
   )
 )
