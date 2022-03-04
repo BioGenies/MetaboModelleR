@@ -254,7 +254,7 @@ server <- function(input, output, session) {
                              buttons = c("excel", "csv")),
               filter = "bottom",
               rownames = FALSE)
-  })
+  }, server = FALSE)
   
   output[["tests_table"]] <- DT::renderDataTable({
     datatable(data = comparison_tests(),
@@ -266,7 +266,7 @@ server <- function(input, output, session) {
                              buttons = c("excel", "csv")),
               filter = "bottom",
               rownames = FALSE)
-  })
+  }, server = FALSE)
   
   
 }

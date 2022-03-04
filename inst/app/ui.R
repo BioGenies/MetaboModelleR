@@ -24,8 +24,7 @@ ui <- fluidPage(
                       h5("Check if groups are paired:"),
                       checkboxInput("paired", "Paired", FALSE)),
                column(7, 
-                      DT::dataTableOutput("group_dt"),
-                      verbatimTextOutput("debug"))
+                      DT::dataTableOutput("group_dt"))
                
       ),
       tabPanel("Analysis", 
