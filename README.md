@@ -14,3 +14,5 @@ If you have successfully installed the package, run the GUI using:
 ``` r
 easyR::easyR_gui()
 ```
+
+Remember that the column with compound names in your data should be named **Compound**.
