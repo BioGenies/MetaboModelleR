@@ -39,7 +39,7 @@ server <- function(input, output, session) {
     req(file)
     validate(need(ext == "xlsx", "Please upload a xlsx file"))
     
-    readxl::read_excel(file[["datapath"]])
+    readxl::read_excel(file[["datapath"]], sheet = 1)
   })
   
   
@@ -58,10 +58,11 @@ server <- function(input, output, session) {
   #Analysis
   
   data_prepared <- reactive({
-    raw_dat <- data_selected()
-    pivot_longer(data = raw_dat, cols = -Compound) %>% 
-      group_by(Compound) %>% 
-      mutate(group_label = rv_df[["group_df"]][["group"]]) %>% 
+    group_vector <- setNames(rv_df[["group_df"]][["group"]], setdiff(colnames(data_selected()), "Compound"))
+
+    data_selected() %>% 
+      pivot_longer(cols = -Compound) %>% 
+      mutate(group_label = group_vector[name]) %>% 
       mutate(value = as.numeric(value))
   })
   
