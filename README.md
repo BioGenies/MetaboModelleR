@@ -1,9 +1,9 @@
-## Start
+## Getting started
 
-To run this app, use:
+Execute following commands in the R console:
 
+``` r
+# install.packages("devtools")
+devtools::install_github("michbur/easyR")
+easyR::easyR_gui()
 ```
-source("https://raw.githubusercontent.com/michbur/easyR/main/setup-app.R")
-```
-
-Before running the app for the first time, you will be asked if you want to initiate renv and if you want to restore the packages. To all of these questions, answer 'y' (yes). Afterwards, all necessary packages will be downloaded.

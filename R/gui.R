@@ -11,4 +11,4 @@
 #' @export easyR_gui
 
 easyR_gui <- function(port = getOption("shiny.port"))
-  runApp(system.file("app", package = "easyR"), port = port)
+  runApp(system.file("app", package = "easyR"), port = port, launch.browser = TRUE)
