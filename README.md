@@ -8,6 +8,7 @@ devtools::install_github("michbur/easyR", upgrade = "always", dependencies = TRU
 ```
 
 See the example below: 
+
 <img src="https://raw.githubusercontent.com/michbur/easyR/main/inst/additional-figures/r-console.png" alt="rconsole" style="height: 200px;"/>
 
 
