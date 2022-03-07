@@ -29,20 +29,27 @@ ui <- fluidPage(
                
       ),
       tabPanel("Analysis", 
-               column(12, selectInput("compound", 
-                                      "Select compound:", 
-                                      choices = NULL)),
-               column(6,
-                      h3("Normality"),
-                      "Shapiro-Wilk Normality Test:",
-                      shinycssloaders::withSpinner(tableOutput("shapiro"))
+               fluidRow(
+                 column(12, selectInput("compound", 
+                                        "Select compound:", 
+                                        choices = NULL)),
+                 column(6,
+                        h3("Normality"),
+                        "Shapiro-Wilk Normality Test:",
+                        shinycssloaders::withSpinner(tableOutput("shapiro"))
+                 ),
+                 column(6,
+                        h3("Between groups comparison"),
+                        shinycssloaders::withSpinner(tableOutput("tests"))
+                 )
                ),
-               column(6,
-                      h3("Between groups comparison"),
-                      shinycssloaders::withSpinner(tableOutput("tests"))
+               fluidRow(
+                 shinycssloaders::withSpinner(plotOutput("dist_plot")),
                ),
-               shinycssloaders::withSpinner(plotOutput("dist_plot")),
-               downloadButton("download_png", "Download png")
+               fluidRow(
+                 br(),
+                 downloadButton("download_png", "Download png")
+               )
       ),
       tabPanel("Download report",
                h3("You can download a PDF file with the analysis"),

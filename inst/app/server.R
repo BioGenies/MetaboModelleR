@@ -116,8 +116,12 @@ server <- function(input, output, session) {
   })
   
   
+  cmp_name <- reactive({
+    input[["compound"]]
+  })
+  
   output[["download_png"]] <- 
-    downloadHandler(filename = paste0(input[["compound"]], "_plot.png"),
+    downloadHandler(filename = function() paste0(cmp_name(), "_plot.png"),
                     content = function(file){
                       ggsave(file, 
                              plot_out(), 
