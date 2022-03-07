@@ -40,6 +40,7 @@ server <- function(input, output, session) {
     req(file)
     validate(need(ext == "xlsx", "Please upload a xlsx file"))
     
+<<<<<<< HEAD
     dat <- readxl::read_excel(file[["datapath"]])[30:40, ]
     
     if(!("Compound" %in% colnames(dat))) {
@@ -53,6 +54,9 @@ server <- function(input, output, session) {
   
   output[["error_compound"]] <- renderText({
     error[["error"]]
+=======
+    readxl::read_excel(file[["datapath"]], sheet = 1)
+>>>>>>> 48b7fb27bc07d2aa02966a6bfb941ffd65ddb7a9
   })
   
   
@@ -78,7 +82,6 @@ server <- function(input, output, session) {
     group_vector <- setNames(rv_df[["group_df"]][["group"]], 
                              setdiff(colnames(data_selected()), 
                                      "Compound"))
-    
     data_selected() %>% 
       pivot_longer(cols = -Compound) %>% 
       mutate(group_label = group_vector[name]) %>% 
