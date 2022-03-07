@@ -41,7 +41,7 @@ server <- function(input, output, session) {
     validate(need(ext == "xlsx", "Please upload a xlsx file"))
     
     dat <- readxl::read_excel(file[["datapath"]])
-  
+    
     if(!("Compound" %in% colnames(dat))) {
       error[["error"]] <- "ERROR! There is no column named 'Compound'! 
       Please provide new data."
@@ -67,6 +67,10 @@ server <- function(input, output, session) {
                       choices = unique(dat[["Compound"]]))
   })
   
+  compounds <- reactive({
+    unique(data_prepared()[["Compound"]])
+  })
+  
   
   #Analysis
   
@@ -84,7 +88,6 @@ server <- function(input, output, session) {
       filter(Compound == input[["compound"]])
     
     group_label <- unique(dat[["group_label"]])
-    cmp <- unique(dat[["Compound"]])
     
     hist <- ggplot(dat, aes(x = value, fill = group_label)) + 
       geom_histogram() +
@@ -102,7 +105,7 @@ server <- function(input, output, session) {
     
     (hist + boxplot + qqplot)* facet_wrap(~ group_label, ncol = 1)* 
       theme(legend.position = "bottom") + 
-      plot_annotation(paste0("Compound ", cmp))
+      plot_annotation(paste0("Compound ", input[["compound"]]))
   })
   
   
@@ -126,18 +129,23 @@ server <- function(input, output, session) {
     dat <- data_prepared()
     
     group_label <- unique(dat[["group_label"]])
-    compound <- unique(unique(dat[["Compound"]]))
+    compound <- compounds()
     
     lapply(group_label, function(ith_group) {
       lapply(compound, function(ith_compound) {
-        dat %>% 
+        tmp_dat <- dat %>% 
           filter(group_label == ith_group, Compound == ith_compound) %>%
-          pull(value) %>%
-          shapiro.test() %>%
-          getElement("p.value") %>%
-          data.frame(group_label = ith_group, 
-                     Compound = ith_compound, 
-                     pval = .)
+          pull(value)
+        
+        tryCatch({
+          shapiro.test(tmp_dat) %>%
+            getElement("p.value") %>%
+            data.frame(group_label = ith_group, 
+                       Compound = ith_compound, 
+                       pval = .)
+        }, error = function(cond) {
+          return(NA)
+        })
       }) %>% bind_rows()
     }) %>%
       bind_rows() %>%
@@ -158,7 +166,7 @@ server <- function(input, output, session) {
   comparison_tests <- reactive({
     dat <- data_prepared()
     
-    cmp <- unique(unique(dat[["Compound"]]))
+    cmp <- compounds()
     
     is_paired <- input[["paired"]]
     
@@ -172,24 +180,40 @@ server <- function(input, output, session) {
         
       } else {
         lapply(cmp, function(ith_compound) {
-          rbind(dat %>% 
-                  filter(Compound == ith_compound) %>%
-                  t.test(value ~ group_label, 
-                         data = .,
-                         paired = is_paired) %>% 
-                  getElement("p.value") %>% 
-                  data.frame(test = "T-test",
-                             Compound = ith_compound, 
-                             pval = .),
-                dat %>% 
-                  filter(Compound == ith_compound) %>%
-                  wilcox.test(value ~ group_label, 
-                              data = .,
-                              paired = is_paired) %>% 
-                  getElement("p.value") %>% 
-                  data.frame(test = "Wilcoxon signed-rank test",
-                             Compound = ith_compound, 
-                             pval = .))
+          
+          tmp_dat <- dat %>% 
+            filter(Compound == ith_compound)
+          
+          t_test_one_res <- tryCatch({
+            t.test(value ~ group_label, 
+                   data = tmp_dat,
+                   paired = is_paired) %>% 
+              getElement("p.value") %>% 
+              data.frame(test = "T-test",
+                         Compound = ith_compound, 
+                         pval = .)
+          }, error = function(cond) {
+            return(data.frame(test = "T-test",
+                              Compound = ith_compound, 
+                              pval = NA))
+          })
+          
+          wilcoxon_one_res <- tryCatch({
+            wilcox.test(value ~ group_label, 
+                        data = tmp_dat,
+                        paired = is_paired) %>% 
+              getElement("p.value") %>% 
+              data.frame(test = "Wilcoxon signed-rank test",
+                         Compound = ith_compound, 
+                         pval = .)
+          }, error = function(cond) {
+            return(data.frame(test = "Wilcoxon signed-rank test",
+                              Compound = ith_compound, 
+                              pval = NA))
+          })
+          
+          rbind(t_test_one_res, wilcoxon_one_res)
+          
         }) %>% 
           bind_rows() %>%
           group_by(test) %>% 
