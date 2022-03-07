@@ -40,8 +40,7 @@ server <- function(input, output, session) {
     req(file)
     validate(need(ext == "xlsx", "Please upload a xlsx file"))
     
-<<<<<<< HEAD
-    dat <- readxl::read_excel(file[["datapath"]])[30:40, ]
+    dat <- readxl::read_excel(file[["datapath"]], sheet = 1)
     
     if(!("Compound" %in% colnames(dat))) {
       error[["error"]] <- "ERROR! There is no column named 'Compound'! 
@@ -54,9 +53,6 @@ server <- function(input, output, session) {
   
   output[["error_compound"]] <- renderText({
     error[["error"]]
-=======
-    readxl::read_excel(file[["datapath"]], sheet = 1)
->>>>>>> 48b7fb27bc07d2aa02966a6bfb941ffd65ddb7a9
   })
   
   
@@ -150,7 +146,9 @@ server <- function(input, output, session) {
                        Compound = ith_compound, 
                        pval = .)
         }, error = function(cond) {
-          return(NA)
+          return(data.frame(group_label = ith_group, 
+                            Compound = ith_compound, 
+                            pval = NA))
         })
       }) %>% bind_rows()
     }) %>%
