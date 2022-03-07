@@ -8,6 +8,7 @@ ui <- fluidPage(
                          multiple = FALSE,
                          accept = c(".xlsx")),
                h3("Selected:"),
+               verbatimTextOutput("error_compound"),
                tableOutput("data_selected")
       ),
       tabPanel("Groups", 

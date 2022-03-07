@@ -10,6 +10,7 @@ source("ui.R")
 server <- function(input, output, session) {
   
   rv_df <- reactiveValues()
+  error <- reactiveValues()
   
   output[["group_dt"]] <- DT::renderDataTable({
     rv_df[["group_df"]] %>% 
@@ -39,7 +40,19 @@ server <- function(input, output, session) {
     req(file)
     validate(need(ext == "xlsx", "Please upload a xlsx file"))
     
-    readxl::read_excel(file[["datapath"]])
+    dat <- readxl::read_excel(file[["datapath"]])
+  
+    if(!("Compound" %in% colnames(dat))) {
+      error[["error"]] <- "ERROR! There is no column named 'Compound'! 
+      Please provide new data."
+    } 
+    dat
+    
+  })
+  
+  
+  output[["error_compound"]] <- renderText({
+    error[["error"]]
   })
   
   
