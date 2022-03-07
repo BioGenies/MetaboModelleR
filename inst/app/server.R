@@ -40,7 +40,7 @@ server <- function(input, output, session) {
     req(file)
     validate(need(ext == "xlsx", "Please upload a xlsx file"))
     
-    dat <- readxl::read_excel(file[["datapath"]])
+    dat <- readxl::read_excel(file[["datapath"]])[30:40, ]
     
     if(!("Compound" %in% colnames(dat))) {
       error[["error"]] <- "ERROR! There is no column named 'Compound'! 
@@ -75,10 +75,13 @@ server <- function(input, output, session) {
   #Analysis
   
   data_prepared <- reactive({
-    raw_dat <- data_selected()
-    pivot_longer(data = raw_dat, cols = -Compound) %>% 
-      group_by(Compound) %>% 
-      mutate(group_label = rv_df[["group_df"]][["group"]]) %>% 
+    group_vector <- setNames(rv_df[["group_df"]][["group"]], 
+                             setdiff(colnames(data_selected()), 
+                                     "Compound"))
+    
+    data_selected() %>% 
+      pivot_longer(cols = -Compound) %>% 
+      mutate(group_label = group_vector[name]) %>% 
       mutate(value = as.numeric(value))
   })
   
@@ -304,6 +307,5 @@ server <- function(input, output, session) {
               filter = "bottom",
               rownames = FALSE)
   }, server = FALSE)
-  
   
 }
