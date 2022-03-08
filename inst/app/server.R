@@ -11,10 +11,13 @@ server <- function(input, output, session) {
   
   rv_df <- reactiveValues()
   error <- reactiveValues()
+  groups_ok <- reactiveValues()
   
   output[["group_dt"]] <- DT::renderDataTable({
     rv_df[["group_df"]] %>% 
-      DT::datatable(editable = FALSE, options = list(paging = FALSE))
+      DT::datatable(editable = FALSE, 
+                    options = list(paging = FALSE),
+                    colnames = c("Sample name", "Group"))
   })
   
   observeEvent(data_selected(), {
@@ -71,10 +74,7 @@ server <- function(input, output, session) {
     unique(data_prepared()[["Compound"]])
   })
   
-  
-  #Analysis
-  
-  data_prepared <- reactive({
+  data_prepared_tmp <- reactive({
     group_vector <- setNames(rv_df[["group_df"]][["group"]], 
                              setdiff(colnames(data_selected()), 
                                      "Compound"))
@@ -82,6 +82,63 @@ server <- function(input, output, session) {
       pivot_longer(cols = -Compound) %>% 
       mutate(group_label = group_vector[name]) %>% 
       mutate(value = as.numeric(value))
+  })
+  
+  data_prepared <- reactive({
+    switch(input[["transform"]],
+           None = {
+             data_prepared_tmp()
+           },
+           Logarithm = {
+             data_prepared_tmp() %>% 
+               mutate(value = log(value))
+           },
+           `Inverse hyperbolic sine` = {
+             data_prepared_tmp() %>% 
+               mutate(value = asinh(value))
+           })
+  })
+  
+  
+  output[["error_groups"]] <- renderText({
+    groups_ok[["is_ok"]] <- FALSE
+    
+    groups <- data_prepared()[["group_label"]]
+    
+    if(!(length(unique(groups)) == 1)) {
+      
+      groups_ok[["is_ok"]] <- TRUE
+      
+      if(input[["paired"]]) {
+        
+        if(length(unique(table(groups))) != 1) {
+          
+          groups_ok[["is_ok"]] <- FALSE
+          return("For pairwise comparison groups need to be equinumerous.")
+          
+        }
+      } 
+    } else {
+      
+      "For between group comparison you need to set at least two groups."
+    }
+    
+  })
+  
+  
+  #Analysis
+  
+  output[["plot_raw_data"]] <- renderPlot({
+    if(input[["transform"]] != "None") {
+      dat <- data_prepared_tmp() %>% 
+        filter(Compound == input[["compound"]])
+      
+      ggplot(dat, aes(x = value, fill = group_label)) + 
+        geom_histogram() +
+        xlab("") +
+        ggtitle("Data before transformation") +
+        facet_wrap(~ group_label, ncol = 1)
+    }
   })
   
   
@@ -112,7 +169,9 @@ server <- function(input, output, session) {
   
   
   output[["dist_plot"]] <- renderPlot({
-    plot_out()
+    if(groups_ok[["is_ok"]]) {
+      plot_out()
+    }
   })
   
   
@@ -132,39 +191,50 @@ server <- function(input, output, session) {
   
   shapiro_res <- reactive({
     
-    dat <- data_prepared()
-    
-    group_label <- unique(dat[["group_label"]])
-    compound <- compounds()
-    
-    lapply(group_label, function(ith_group) {
-      lapply(compound, function(ith_compound) {
-        tmp_dat <- dat %>% 
-          filter(group_label == ith_group, Compound == ith_compound) %>%
-          pull(value)
-        
-        tryCatch({
-          shapiro.test(tmp_dat) %>%
-            getElement("p.value") %>%
-            data.frame(group_label = ith_group, 
-                       Compound = ith_compound, 
-                       pval = .)
-        }, error = function(cond) {
-          return(data.frame(group_label = ith_group, 
-                            Compound = ith_compound, 
-                            pval = NA))
-        })
-      }) %>% bind_rows()
-    }) %>%
-      bind_rows() %>%
-      group_by(group_label) %>% 
-      mutate(adjusted_pval = p.adjust(pval, method = "BH"))
+    if(groups_ok[["is_ok"]]) {
+      
+      dat <- data_prepared()
+      
+      group_label <- unique(dat[["group_label"]])
+      compound <- compounds()
+      
+      lapply(group_label, function(ith_group) {
+        lapply(compound, function(ith_compound) {
+          tmp_dat <- dat %>% 
+            filter(group_label == ith_group, Compound == ith_compound) %>%
+            pull(value)
+          
+          tryCatch({
+            shapiro.test(tmp_dat) %>%
+              getElement("p.value") %>%
+              data.frame(group_label = ith_group, 
+                         Compound = ith_compound, 
+                         pval = .)
+          }, error = function(cond) {
+            return(data.frame(group_label = ith_group, 
+                              Compound = ith_compound, 
+                              pval = NA))
+          })
+        }) %>% bind_rows()
+      }) %>%
+        bind_rows() %>%
+        group_by(group_label) %>% 
+        mutate(adjusted_pval = p.adjust(pval, method = "BH"),
+               transformation = input[["transform"]])
+    } else {
+      return("Invalid groups!")
+    }
   })
   
   shapiro_out <- reactive({
-    shapiro_res() %>% 
-      filter(Compound == input[["compound"]]) %>% 
-      select(-Compound)
+    if(is.data.frame(shapiro_res())) {
+      shapiro_res() %>% 
+        filter(Compound == input[["compound"]]) %>% 
+        select(-Compound)
+    } else {
+      
+      shapiro_res()
+    }
   })
   
   output[["shapiro"]] <- renderTable({
@@ -172,61 +242,57 @@ server <- function(input, output, session) {
   })
   
   comparison_tests <- reactive({
-    dat <- data_prepared()
     
-    cmp <- compounds()
-    
-    is_paired <- input[["paired"]]
-    
-    if(length(unique(dat[["group_label"]])) == 1) {
-      "For between group comparison you need to set at least two groups."
+    if(groups_ok[["is_ok"]]) {
+      dat <- data_prepared()
       
+      cmp <- compounds()
+      
+      is_paired <- input[["paired"]]
+      
+      lapply(cmp, function(ith_compound) {
+        
+        tmp_dat <- dat %>% 
+          filter(Compound == ith_compound)
+        
+        t_test_one_res <- tryCatch({
+          t.test(value ~ group_label, 
+                 data = tmp_dat,
+                 paired = is_paired) %>% 
+            getElement("p.value") %>% 
+            data.frame(test = "T-test",
+                       Compound = ith_compound, 
+                       pval = .)
+        }, error = function(cond) {
+          return(data.frame(test = "T-test",
+                            Compound = ith_compound, 
+                            pval = NA))
+        })
+        
+        wilcoxon_one_res <- tryCatch({
+          wilcox.test(value ~ group_label, 
+                      data = tmp_dat,
+                      paired = is_paired) %>% 
+            getElement("p.value") %>% 
+            data.frame(test = "Wilcoxon signed-rank test",
+                       Compound = ith_compound, 
+                       pval = .)
+        }, error = function(cond) {
+          return(data.frame(test = "Wilcoxon signed-rank test",
+                            Compound = ith_compound, 
+                            pval = NA))
+        })
+        
+        rbind(t_test_one_res, wilcoxon_one_res)
+        
+      }) %>% 
+        bind_rows() %>%
+        group_by(test) %>% 
+        mutate(adjusted_pval = p.adjust(pval, method = "BH"),
+               transformation = input[["transform"]])
     } else {
-      if(is_paired & (length(unique(table(dat[["group_label"]]))) != 1)) {
-        
-        return("For pairwise comparison groups need to be equinumerous.")
-        
-      } else {
-        lapply(cmp, function(ith_compound) {
-          
-          tmp_dat <- dat %>% 
-            filter(Compound == ith_compound)
-          
-          t_test_one_res <- tryCatch({
-            t.test(value ~ group_label, 
-                   data = tmp_dat,
-                   paired = is_paired) %>% 
-              getElement("p.value") %>% 
-              data.frame(test = "T-test",
-                         Compound = ith_compound, 
-                         pval = .)
-          }, error = function(cond) {
-            return(data.frame(test = "T-test",
-                              Compound = ith_compound, 
-                              pval = NA))
-          })
-          
-          wilcoxon_one_res <- tryCatch({
-            wilcox.test(value ~ group_label, 
-                        data = tmp_dat,
-                        paired = is_paired) %>% 
-              getElement("p.value") %>% 
-              data.frame(test = "Wilcoxon signed-rank test",
-                         Compound = ith_compound, 
-                         pval = .)
-          }, error = function(cond) {
-            return(data.frame(test = "Wilcoxon signed-rank test",
-                              Compound = ith_compound, 
-                              pval = NA))
-          })
-          
-          rbind(t_test_one_res, wilcoxon_one_res)
-          
-        }) %>% 
-          bind_rows() %>%
-          group_by(test) %>% 
-          mutate(adjusted_pval = p.adjust(pval, method = "BH"))
-      }
+      
+      return("Invalid groups!")
     }
   })
   

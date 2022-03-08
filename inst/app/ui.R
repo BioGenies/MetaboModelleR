@@ -13,6 +13,7 @@ ui <- fluidPage(
       ),
       tabPanel("Groups", 
                br(),
+               verbatimTextOutput("error_groups"),
                column(5, 
                       h3("You can change group name here:"),
                       h5("1. Select rows from the table."),
@@ -23,7 +24,13 @@ ui <- fluidPage(
                       br(),
                       br(),
                       h5("Check if groups are paired:"),
-                      checkboxInput("paired", "Paired", FALSE)),
+                      checkboxInput("paired", "Paired", FALSE),
+                      radioButtons(inputId = "transform",
+                                   label = "Choose transformation:",
+                                   choices = c("None", 
+                                               "Logarithm", 
+                                               "Inverse hyperbolic sine"))
+               ),
                column(7, 
                       DT::dataTableOutput("group_dt"))
                
@@ -49,7 +56,14 @@ ui <- fluidPage(
                fluidRow(
                  br(),
                  downloadButton("download_png", "Download png")
-               )
+               ),
+               br(),
+               br(),
+               fluidRow(
+                 shinycssloaders::withSpinner(plotOutput("plot_raw_data"))
+               ),
+               br(),
+               br(),
       ),
       tabPanel("Download report",
                h3("You can download a PDF file with the analysis"),
