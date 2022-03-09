@@ -48,7 +48,7 @@ server <- function(input, output, session) {
     sheets[["sheets"]] <- readxl::excel_sheets(file[["datapath"]])
     
     
-    sheet <- if(input[["sheet"]] == "") {
+    sheet <- if(!(input[["sheet"]] %in% sheets[["sheets"]])) {
       1
     } else {
       input[["sheet"]]
