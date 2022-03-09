@@ -12,6 +12,7 @@ server <- function(input, output, session) {
   rv_df <- reactiveValues()
   error <- reactiveValues()
   groups_ok <- reactiveValues()
+  error[["error"]] <- TRUE
   
   output[["group_dt"]] <- DT::renderDataTable({
     rv_df[["group_df"]] %>% 
@@ -44,18 +45,20 @@ server <- function(input, output, session) {
     validate(need(ext == "xlsx", "Please upload a xlsx file"))
     
     dat <- readxl::read_excel(file[["datapath"]], sheet = 1)
-    
+
     if(!("Compound" %in% colnames(dat))) {
-      error[["error"]] <- "ERROR! There is no column named 'Compound'! 
-      Please provide new data."
-    } 
+      showNotification("ERROR! There is no column named 'Compound'! 
+                         Please provide new data.",
+                       duration = NULL,
+                       type = "error",
+                       closeButton = FALSE,
+                       id = "compound")
+      
+    } else {
+      error[["error"]] <- FALSE
+    }
     dat
-    
-  })
-  
-  
-  output[["error_compound"]] <- renderText({
-    error[["error"]]
+
   })
   
   
@@ -65,23 +68,22 @@ server <- function(input, output, session) {
   
   observe({
     dat <- data_selected() 
-    
-    updateSelectInput(session, "compound", 
-                      choices = unique(dat[["Compound"]]))
-  })
-  
-  compounds <- reactive({
-    unique(data_prepared()[["Compound"]])
+    if(!error[["error"]]) {
+      updateSelectInput(session, "compound", 
+                        choices = unique(dat[["Compound"]]))
+    }
   })
   
   data_prepared_tmp <- reactive({
-    group_vector <- setNames(rv_df[["group_df"]][["group"]], 
-                             setdiff(colnames(data_selected()), 
-                                     "Compound"))
-    data_selected() %>% 
-      pivot_longer(cols = -Compound) %>% 
-      mutate(group_label = group_vector[name]) %>% 
-      mutate(value = as.numeric(value))
+    if(!error[["error"]]) {
+      group_vector <- setNames(rv_df[["group_df"]][["group"]], 
+                               setdiff(colnames(data_selected()), 
+                                       "Compound"))
+      data_selected() %>% 
+        pivot_longer(cols = -Compound) %>% 
+        mutate(group_label = group_vector[name]) %>% 
+        mutate(value = as.numeric(value))
+    }
   })
   
   data_prepared <- reactive({
@@ -99,30 +101,75 @@ server <- function(input, output, session) {
            })
   })
   
+  compounds <- reactive({
+    unique(data_prepared()[["Compound"]])
+  })
   
-  output[["error_groups"]] <- renderText({
-    groups_ok[["is_ok"]] <- FALSE
+  
+  
+  observe({
     
     groups <- data_prepared()[["group_label"]]
     
-    if(!(length(unique(groups)) == 1)) {
+    if(input[["tabs"]] == "Groups") {
       
-      groups_ok[["is_ok"]] <- TRUE
-      
-      if(input[["paired"]]) {
+      if(length(unique(groups)) == 1) {
+        
+        removeNotification(id = "valid")
+        removeNotification(id = "paired_error")
+        showNotification("For between group comparison you need to set at least two groups.",
+                         duration = NULL,
+                         type = "error",
+                         closeButton = FALSE,
+                         id = "g_error")
+        groups_ok[["is_ok"]] <- FALSE
+      } else {
         
         if(length(unique(table(groups))) != 1) {
           
-          groups_ok[["is_ok"]] <- FALSE
-          return("For pairwise comparison groups need to be equinumerous.")
+          if(input[["paired"]]) {
+            
+            removeNotification(id = "valid")
+            removeNotification(id = "g_error")
+            showNotification("For pairwise comparison groups need to be equinumerous.",
+                             duration = NULL,
+                             type = "error",
+                             closeButton = FALSE,
+                             id = "paired_error")
+            groups_ok[["is_ok"]] <- FALSE
+          } else {
+            
+            groups_ok[["is_ok"]] <- TRUE
+            
+            removeNotification(id = "paired_error")
+            removeNotification(id = "g_error")
+            showNotification("The data is valid.",
+                             duration = NULL,
+                             type = "message",
+                             closeButton = FALSE,
+                             id = "valid")
+          }
           
+        } else {
+          
+          groups_ok[["is_ok"]] <- TRUE
+          
+          removeNotification(id = "paired_error")
+          removeNotification(id = "g_error")
+          showNotification("The data is valid.",
+                           duration = NULL,
+                           type = "message",
+                           closeButton = FALSE,
+                           id = "valid")
         }
-      } 
+      }
     } else {
-      
-      "For between group comparison you need to set at least two groups."
+      removeNotification(id = "paired_error")
+      removeNotification(id = "g_error")
+      removeNotification(id = "valid")
     }
     
+    print(groups_ok[["is_ok"]])
   })
   
   
@@ -190,7 +237,7 @@ server <- function(input, output, session) {
                              units = "mm")})
   
   shapiro_res <- reactive({
-    
+
     if(groups_ok[["is_ok"]]) {
       
       dat <- data_prepared()
