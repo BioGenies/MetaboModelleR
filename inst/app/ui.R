@@ -4,9 +4,14 @@ ui <- fluidPage(
   mainPanel(
     tabsetPanel(id = "tabs",
                 tabPanel("Data", 
-                         fileInput("data", "Choose .xlsx file:",
-                                   multiple = FALSE,
-                                   accept = c(".xlsx")),
+                         fluidRow(fileInput("data", "Choose .xlsx file:",
+                                            multiple = FALSE,
+                                            accept = c(".xlsx")),
+                                  selectInput("sheet", 
+                                              "Select sheet:", 
+                                              choices = NULL,
+                                              selected = NULL)),
+                         
                          h3("Selected:"),
                          verbatimTextOutput("error_compound"),
                          tableOutput("data_selected")

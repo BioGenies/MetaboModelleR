@@ -11,8 +11,9 @@ server <- function(input, output, session) {
   
   rv_df <- reactiveValues()
   error <- reactiveValues()
-  groups_ok <- reactiveValues()
   error[["error"]] <- TRUE
+  groups_ok <- reactiveValues()
+  sheets <- reactiveValues()
   
   output[["group_dt"]] <- DT::renderDataTable({
     rv_df[["group_df"]] %>% 
@@ -44,9 +45,21 @@ server <- function(input, output, session) {
     req(file)
     validate(need(ext == "xlsx", "Please upload a xlsx file"))
     
-    dat <- readxl::read_excel(file[["datapath"]], sheet = 1)
-
+    sheets[["sheets"]] <- readxl::excel_sheets(file[["datapath"]])
+    
+    
+    sheet <- if(input[["sheet"]] == "") {
+      1
+    } else {
+      input[["sheet"]]
+    }
+    
+    dat <- readxl::read_excel(file[["datapath"]], 
+                              sheet = sheet)
+    
+    
     if(!("Compound" %in% colnames(dat))) {
+      error[["error"]] <- TRUE
       showNotification("ERROR! There is no column named 'Compound'! 
                          Please provide new data.",
                        duration = NULL,
@@ -56,9 +69,16 @@ server <- function(input, output, session) {
       
     } else {
       error[["error"]] <- FALSE
+      removeNotification(id = "compound")
     }
     dat
-
+    
+  })
+  
+  observe({
+    updateSelectInput(session, 
+                      "sheet", 
+                      choices = sheets[["sheets"]])
   })
   
   
@@ -79,10 +99,12 @@ server <- function(input, output, session) {
       group_vector <- setNames(rv_df[["group_df"]][["group"]], 
                                setdiff(colnames(data_selected()), 
                                        "Compound"))
-      data_selected() %>% 
+      
+      data_selected()  %>% 
+        mutate(across(everything(), ~replace(., . ==  "NaN" , NA))) %>% 
+        mutate_at(vars(-("Compound")), as.numeric) %>% 
         pivot_longer(cols = -Compound) %>% 
-        mutate(group_label = group_vector[name]) %>% 
-        mutate(value = as.numeric(value))
+        mutate(group_label = group_vector[name])
     }
   })
   
@@ -237,7 +259,7 @@ server <- function(input, output, session) {
                              units = "mm")})
   
   shapiro_res <- reactive({
-
+    
     if(groups_ok[["is_ok"]]) {
       
       dat <- data_prepared()
