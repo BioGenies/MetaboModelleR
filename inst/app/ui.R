@@ -43,7 +43,15 @@ ui <- fluidPage(
                                              label = "Choose transformation:",
                                              choices = c("None", 
                                                          "Logarithm", 
-                                                         "Inverse hyperbolic sine"))
+                                                         "Inverse hyperbolic sine")),
+                                checkboxGroupInput("tests", 
+                                                   "Choose tests to perform",
+                                                   choices = c("Shapiro–Wilk test",
+                                                               "Student's t-test",
+                                                               "Mann–Whitney U-test"),
+                                                   selected = c("Shapiro–Wilk test",
+                                                                "Student's t-test",
+                                                                "Mann–Whitney U-test")),
                          ),
                          column(7, 
                                 DT::dataTableOutput("group_dt"))
@@ -54,15 +62,14 @@ ui <- fluidPage(
                            column(12, selectInput("compound", 
                                                   "Select compound:", 
                                                   choices = NULL)),
-                           column(6,
-                                  h3("Normality"),
-                                  "Shapiro-Wilk Normality Test:",
-                                  shinycssloaders::withSpinner(tableOutput("shapiro"))
-                           ),
-                           column(6,
-                                  h3("Between groups comparison"),
-                                  shinycssloaders::withSpinner(tableOutput("tests"))
-                           )
+                           h3("Normality"),
+                           "Shapiro-Wilk Normality Test:",
+                           shinycssloaders::withSpinner(tableOutput("shapiro")),
+                           h3("Between groups comparison"),
+                           tableOutput("tests"),
+                           br(),
+                           br(),
+                           br(),
                          ),
                          fluidRow(
                            shinycssloaders::withSpinner(plotOutput("dist_plot")),

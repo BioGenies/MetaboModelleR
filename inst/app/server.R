@@ -26,7 +26,7 @@ server <- function(input, output, session) {
     rv_df[["group_df"]] <- 
       data.frame(sample_name = setdiff(colnames(data_selected()), 
                                        "Compound")) %>% 
-      mutate(group = "A")
+      mutate(group = "Control")
   })
   
   observeEvent(input[["change_group_btn"]], {
@@ -267,29 +267,36 @@ server <- function(input, output, session) {
       group_label <- unique(dat[["group_label"]])
       compound <- compounds()
       
-      lapply(group_label, function(ith_group) {
-        lapply(compound, function(ith_compound) {
-          tmp_dat <- dat %>% 
-            filter(group_label == ith_group, Compound == ith_compound) %>%
-            pull(value)
-          
-          tryCatch({
-            shapiro.test(tmp_dat) %>%
-              getElement("p.value") %>%
-              data.frame(group_label = ith_group, 
-                         Compound = ith_compound, 
-                         pval = .)
-          }, error = function(cond) {
-            return(data.frame(group_label = ith_group, 
-                              Compound = ith_compound, 
-                              pval = NA))
-          })
-        }) %>% bind_rows()
-      }) %>%
-        bind_rows() %>%
-        group_by(group_label) %>% 
-        mutate(adjusted_pval = p.adjust(pval, method = "BH"),
-               transformation = input[["transform"]])
+      if("Shapiro–Wilk test" %in% input[["tests"]]) {
+        
+        lapply(group_label, function(ith_group) {
+          lapply(compound, function(ith_compound) {
+            tmp_dat <- dat %>% 
+              filter(group_label == ith_group, Compound == ith_compound) %>%
+              pull(value)
+            
+            tryCatch({
+              shapiro.test(tmp_dat) %>%
+                getElement("p.value") %>%
+                data.frame(group_label = ith_group, 
+                           Compound = ith_compound, 
+                           pval = .)
+            }, error = function(cond) {
+              return(data.frame(group_label = ith_group, 
+                                Compound = ith_compound, 
+                                pval = NA))
+            })
+          }) %>% bind_rows()
+        }) %>%
+          bind_rows() %>%
+          group_by(group_label) %>% 
+          mutate(adjusted_pval = p.adjust(pval, method = "BH"),
+                 transformation = input[["transform"]])
+        
+      } else {
+        return("Not performed")
+      }
+      
     } else {
       return("Invalid groups!")
     }
@@ -319,46 +326,94 @@ server <- function(input, output, session) {
       
       is_paired <- input[["paired"]]
       
-      lapply(cmp, function(ith_compound) {
+      results <- lapply(cmp, function(ith_compound) {
         
         tmp_dat <- dat %>% 
-          filter(Compound == ith_compound)
+          filter(Compound == ith_compound) 
         
-        t_test_one_res <- tryCatch({
-          t.test(value ~ group_label, 
-                 data = tmp_dat,
-                 paired = is_paired) %>% 
-            getElement("p.value") %>% 
-            data.frame(test = "T-test",
-                       Compound = ith_compound, 
-                       pval = .)
-        }, error = function(cond) {
-          return(data.frame(test = "T-test",
-                            Compound = ith_compound, 
-                            pval = NA))
-        })
+        avg_res <- tmp_dat %>% 
+          group_by(group_label) %>% 
+          mutate(avg = mean(value)) %>% 
+          select(avg, group_label) %>% 
+          unique()
         
-        wilcoxon_one_res <- tryCatch({
-          wilcox.test(value ~ group_label, 
-                      data = tmp_dat,
-                      paired = is_paired) %>% 
-            getElement("p.value") %>% 
-            data.frame(test = "Wilcoxon signed-rank test",
-                       Compound = ith_compound, 
-                       pval = .)
-        }, error = function(cond) {
-          return(data.frame(test = "Wilcoxon signed-rank test",
-                            Compound = ith_compound, 
-                            pval = NA))
-        })
+        AV_control <- avg_res %>% 
+          filter(group_label == "Control") %>% 
+          pull(avg)
+        AV_case <- avg_res %>% 
+          filter(group_label != "Control") %>% 
+          pull(avg)
         
-        rbind(t_test_one_res, wilcoxon_one_res)
+        p_change <- 100 * (AV_case - AV_control) / AV_control
+        FC <- AV_case / AV_control
+        
+        part_res <- data.frame(Compound = ith_compound,
+                               AV_control = AV_control,
+                               AV_case = AV_case,
+                               p_change = p_change,
+                               FC = FC)
+        
+        # T test
+        
+        if("Student's t-test" %in% input[["tests"]]) {
+          t_test_one_res <- tryCatch({
+            t.test(value ~ group_label, 
+                   data = tmp_dat,
+                   paired = is_paired) %>% {
+                     data.frame(test_T_pval = .[["p.value"]])
+                   } 
+            
+          }, error = function(cond) {
+            
+            data.frame(test_T_pval = NA)
+          })
+          
+          part_res <- cbind(part_res, t_test_one_res)
+        }
+        
+        # Wilcoxon Mann test
+        
+        if("Mann–Whitney U-test" %in% input[["tests"]]) {
+          
+          wilcoxon_one_res <- tryCatch({
+            wilcox.test(value ~ group_label, 
+                        data = tmp_dat,
+                        paired = is_paired) %>% {
+                          data.frame(test_U_pval = .[["p.value"]])
+                        }
+            
+          }, error = function(cond) {
+            
+            data.frame(test_U_pval = NA)
+          })
+          
+          part_res <- cbind(part_res, wilcoxon_one_res)
+          
+        }
+        
+        part_res
         
       }) %>% 
-        bind_rows() %>%
-        group_by(test) %>% 
-        mutate(adjusted_pval = p.adjust(pval, method = "BH"),
-               transformation = input[["transform"]])
+        bind_rows()
+
+      
+      if("Student's t-test" %in% input[["tests"]]) {
+        results <- results %>% 
+          mutate(test_T_adj_pval = p.adjust(test_T_pval, method = "BH"))
+      }
+      
+      if("Mann–Whitney U-test" %in% input[["tests"]]) {
+        results <- results %>% 
+          mutate(test_U_adj_pval = p.adjust(test_U_pval, method = "BH"))
+      }
+      
+      if(all(c("Mann–Whitney U-test", "Student's t-test"))  %in% input[["tests"]]) {
+        results <- results %>% 
+          relocate(test_U_pval, .after = test_T_adj_pval)
+      }
+      results
+      
+      
     } else {
       
       return("Invalid groups!")
