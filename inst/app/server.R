@@ -231,7 +231,7 @@ server <- function(input, output, session) {
       geom_boxplot() +
       ggtitle("Boxplot")
     
-    (hist + boxplot + qqplot)* facet_wrap(~ group_label, ncol = 1)* 
+    (hist + boxplot + qqplot)* facet_wrap(~ group_label, ncol = 1, scales = "free")* 
       theme(legend.position = "bottom") + 
       plot_annotation(paste0("Compound ", input[["compound"]]))
   })
@@ -242,7 +242,6 @@ server <- function(input, output, session) {
       plot_out()
     }
   })
-  
   
   cmp_name <- reactive({
     input[["compound"]]
@@ -325,73 +324,80 @@ server <- function(input, output, session) {
       cmp <- compounds()
       
       is_paired <- input[["paired"]]
-      
+
       results <- lapply(cmp, function(ith_compound) {
         
-        tmp_dat <- dat %>% 
-          filter(Compound == ith_compound) 
+        groups <- unique(setdiff(data_prepared()[["group_label"]], "Control"))
         
-        avg_res <- tmp_dat %>% 
-          group_by(group_label) %>% 
-          mutate(avg = mean(value)) %>% 
-          select(avg, group_label) %>% 
-          unique()
-        
-        AV_control <- avg_res %>% 
-          filter(group_label == "Control") %>% 
-          pull(avg)
-        AV_case <- avg_res %>% 
-          filter(group_label != "Control") %>% 
-          pull(avg)
-        
-        p_change <- 100 * (AV_case - AV_control) / AV_control
-        FC <- AV_case / AV_control
-        
-        part_res <- data.frame(Compound = ith_compound,
-                               AV_control = AV_control,
-                               AV_case = AV_case,
-                               p_change = p_change,
-                               FC = FC)
-        
-        # T test
-        
-        if("Student's t-test" %in% input[["tests"]]) {
-          t_test_one_res <- tryCatch({
-            t.test(value ~ group_label, 
-                   data = tmp_dat,
-                   paired = is_paired) %>% {
-                     data.frame(test_T_pval = .[["p.value"]])
-                   } 
-            
-          }, error = function(cond) {
-            
-            data.frame(test_T_pval = NA)
-          })
+        lapply(groups, function(gr){
           
-          part_res <- cbind(part_res, t_test_one_res)
-        }
-        
-        # Wilcoxon Mann test
-        
-        if("Mann–Whitney U-test" %in% input[["tests"]]) {
+          tmp_dat <- dat %>% 
+            filter(Compound == ith_compound,
+                   group_label %in% c("Control", gr)) 
           
-          wilcoxon_one_res <- tryCatch({
-            wilcox.test(value ~ group_label, 
-                        data = tmp_dat,
-                        paired = is_paired) %>% {
-                          data.frame(test_U_pval = .[["p.value"]])
-                        }
+          avg_res <- tmp_dat %>% 
+            group_by(group_label) %>% 
+            mutate(avg = mean(value, na.rm = TRUE)) %>% 
+            select(avg, group_label) %>% 
+            unique()
+          
+          AV_control <- avg_res %>% 
+            filter(group_label == "Control") %>% 
+            pull(avg)
+          AV_case <- avg_res %>% 
+            filter(group_label == gr) %>% 
+            pull(avg)
+          p_change <- 100 * (AV_case - AV_control) / AV_control
+          FC <- AV_case / AV_control
+          
+          part_res <- data.frame(Compound = ith_compound,
+                                 Case_name = gr,
+                                 AV_control = AV_control,
+                                 AV_case = AV_case,
+                                 p_change = p_change,
+                                 FC = FC)
+          # T test
+          
+          if("Student's t-test" %in% input[["tests"]]) {
+            t_test_one_res <- tryCatch({
+              t.test(value ~ group_label, 
+                     data = tmp_dat,
+                     paired = is_paired) %>% {
+                       data.frame(test_T_pval = .[["p.value"]])
+                     } 
+              
+            }, error = function(cond) {
+              
+              data.frame(test_T_pval = NA)
+            })
             
-          }, error = function(cond) {
+            part_res <- cbind(part_res, t_test_one_res)
+          }
+          
+          # Wilcoxon Mann test
+          
+          if("Mann–Whitney U-test" %in% input[["tests"]]) {
             
-            data.frame(test_U_pval = NA)
-          })
+            wilcoxon_one_res <- tryCatch({
+              wilcox.test(value ~ group_label, 
+                          data = tmp_dat,
+                          paired = is_paired) %>% {
+                            data.frame(test_U_pval = .[["p.value"]])
+                          }
+              
+            }, error = function(cond) {
+              
+              data.frame(test_U_pval = NA)
+            })
+            
+            part_res <- cbind(part_res, wilcoxon_one_res)
+            
+          }
           
-          part_res <- cbind(part_res, wilcoxon_one_res)
+          part_res
           
-        }
-        
-        part_res
+        }) %>% 
+          bind_rows()
         
       }) %>% 
         bind_rows()
@@ -407,7 +413,7 @@ server <- function(input, output, session) {
           mutate(test_U_adj_pval = p.adjust(test_U_pval, method = "BH"))
       }
       
-      if(all(c("Mann–Whitney U-test", "Student's t-test"))  %in% input[["tests"]]) {
+      if(all(c("Mann–Whitney U-test", "Student's t-test")  %in% input[["tests"]])) {
         results <- results %>% 
           relocate(test_U_pval, .after = test_T_adj_pval)
       }
