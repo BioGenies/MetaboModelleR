@@ -19,8 +19,8 @@ ui <- fluidPage(
                 tabPanel("Groups", 
                          tags$head(tags$style(HTML(".shiny-notification {
                                          position:fixed;
-                                         top: calc(38%);
-                                         left: calc(1%);
+                                         top: calc(6%);
+                                         left: calc(30%);
                                          }
                                          "))),
                          br(),
@@ -35,8 +35,6 @@ ui <- fluidPage(
                                 br(),
                                 h5("Check if groups are paired:"),
                                 checkboxInput("paired", "Paired", FALSE),
-                                br(),
-                                br(),
                                 br(),
                                 br(),
                                 radioButtons(inputId = "transform",
@@ -54,6 +52,12 @@ ui <- fluidPage(
                                                                 "Mann–Whitney U-test")),
                          ),
                          column(7, 
+                                br(),
+                                br(),
+                                br(),
+                                br(),
+                                br(),
+                                br(),
                                 DT::dataTableOutput("group_dt"))
                          
                 ),
@@ -67,7 +71,6 @@ ui <- fluidPage(
                            shinycssloaders::withSpinner(tableOutput("shapiro")),
                            h3("Between groups comparison"),
                            tableOutput("tests"),
-                           br(),
                            br(),
                            br(),
                          ),
