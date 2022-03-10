@@ -395,7 +395,7 @@ server <- function(input, output, session) {
         
       }) %>% 
         bind_rows()
-
+      
       
       if("Student's t-test" %in% input[["tests"]]) {
         results <- results %>% 
@@ -486,7 +486,11 @@ server <- function(input, output, session) {
               options = list(pageLength = 5,
                              dom = "tBip",
                              autoWidth = TRUE,
-                             buttons = c("excel", "csv")),
+                             buttons = list( 
+                               list(extend = 'excel', filename = "shapiro_results"),
+                               list(extend = 'csv', filename =  "shapiro_results")
+                             )
+              ),
               filter = "bottom",
               rownames = FALSE)
   }, server = FALSE)
@@ -498,7 +502,11 @@ server <- function(input, output, session) {
               options = list(pageLength = 5,
                              dom = "tBip",
                              autoWidth = TRUE,
-                             buttons = c("excel", "csv")),
+                             buttons = list( 
+                               list(extend = 'excel', filename = "comparison_results"),
+                               list(extend = 'csv', filename =  "comparison_results")
+                             )
+              ),
               filter = "bottom",
               rownames = FALSE)
   }, server = FALSE)
