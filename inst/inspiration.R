@@ -23,7 +23,6 @@ shp_test <- lapply(group_label, function(ith_group) {
   bind_rows() %>%
   group_by(group_label) %>% 
   mutate(adjusted_pval = p.adjust(pval, method = "BH"))
-})
 
 
 

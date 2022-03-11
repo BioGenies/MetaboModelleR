@@ -3,6 +3,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(patchwork)
+library(stringr)
 library(DT)
 library(shinycssloaders)
 source("ui.R")
@@ -15,28 +16,7 @@ server <- function(input, output, session) {
   groups_ok <- reactiveValues()
   sheets <- reactiveValues()
   
-  output[["group_dt"]] <- DT::renderDataTable({
-    rv_df[["group_df"]] %>% 
-      DT::datatable(editable = FALSE, 
-                    options = list(paging = FALSE),
-                    colnames = c("Sample name", "Group"))
-  })
-  
-  observeEvent(data_selected(), {
-    rv_df[["group_df"]] <- 
-      data.frame(sample_name = setdiff(colnames(data_selected()), 
-                                       "Compound")) %>% 
-      mutate(group = "Control")
-  })
-  
-  observeEvent(input[["change_group_btn"]], {
-    rv_df[["group_df"]][input[["group_dt_rows_selected"]], "group"] <- 
-      input[["change_group_txt"]]
-  })
-  
-  output[["debug"]] <- renderPrint({
-    input[["group_dt_rows_selected"]]
-  })
+  #Data 
   
   data_selected <- reactive({
     file <- input[["data"]]
@@ -94,13 +74,36 @@ server <- function(input, output, session) {
     }
   })
   
+  # Groups
+  
+  output[["group_dt"]] <- DT::renderDataTable({
+    rv_df[["group_df"]] %>% 
+      DT::datatable(editable = FALSE, 
+                    options = list(paging = FALSE),
+                    colnames = c("Sample name", "Group"))
+  })
+  
+  observeEvent(data_selected(), {
+    rv_df[["group_df"]] <- 
+      data.frame(sample_name = setdiff(colnames(data_selected()), 
+                                       "Compound")) %>% 
+      mutate(group = "Control")
+  })
+  
+  observeEvent(input[["change_group_btn"]], {
+    rv_df[["group_df"]][input[["group_dt_rows_selected"]], "group"] <- 
+      input[["change_group_txt"]]
+  })
+  
+  
   data_prepared_tmp <- reactive({
     if(!error[["error"]]) {
       group_vector <- setNames(rv_df[["group_df"]][["group"]], 
                                setdiff(colnames(data_selected()), 
                                        "Compound"))
       
-      data_selected()  %>% 
+      data_selected()  %>%
+        mutate(Compound = as.factor(Compound)) %>% 
         mutate(across(everything(), ~replace(., . ==  "NaN" , NA))) %>% 
         mutate_at(vars(-("Compound")), as.numeric) %>% 
         pivot_longer(cols = -Compound) %>% 
@@ -191,7 +194,6 @@ server <- function(input, output, session) {
       removeNotification(id = "valid")
     }
     
-    print(groups_ok[["is_ok"]])
   })
   
   
@@ -324,7 +326,7 @@ server <- function(input, output, session) {
       cmp <- compounds()
       
       is_paired <- input[["paired"]]
-
+      
       results <- lapply(cmp, function(ith_compound) {
         
         groups <- unique(setdiff(data_prepared()[["group_label"]], "Control"))
@@ -444,6 +446,140 @@ server <- function(input, output, session) {
     comparison_out()
   })
   
+  # Summary
+  
+  observe({
+    if(input[["tabs"]] == "Analysis") {
+      updateSelectInput(session,
+                        "group_case",
+                        choices = setdiff(data_prepared()[["group_label"]], "Control"),
+                        selected = setdiff(data_prepared()[["group_label"]], "Control")[1])
+    }
+  })
+  
+  
+  
+  significant_t <- reactive({
+    
+    if(!input[["adjusted"]]) {
+      tmp_dat <- comparison_tests() %>% 
+        select(Compound, Case_name, AV_control, AV_case, test_T_pval) %>% 
+        rename(p_val = test_T_pval)
+    } else {
+      tmp_dat <- comparison_tests() %>% 
+        select(Compound, Case_name, AV_control, AV_case, test_T_adj_pval) %>% 
+        rename(p_val = test_T_adj_pval)
+    }
+    
+    dat_box <- data_prepared() %>% 
+      group_by(group_label, Compound) %>% 
+      mutate(lo = boxplot.stats(value)[["conf"]][1],
+             hi = boxplot.stats(value)[["conf"]][2]) %>% 
+      filter(group_label %in% c("Control", input[["group_case"]])) %>% 
+      select(Compound, group_label, lo, hi) %>% 
+      unique() %>% 
+      mutate(group_label = ifelse(group_label == "Control", "AV_control", "AV_case")) %>% 
+      rename(name = "group_label")
+    
+    tryCatch({
+      p <- tmp_dat %>% 
+        filter(Case_name == input[["group_case"]],
+               p_val < input[["sig_level"]]) %>% 
+        select(-p_val, -Case_name)   %>% 
+        pivot_longer(cols = -Compound) %>% 
+        merge(dat_box, by = c("Compound", "name")) %>% 
+        ggplot(aes(x = value, y = Compound, color = name)) +
+        geom_point() +
+        ggtitle(paste0("Significant differences AV Control vs. AV ", input[["group_case"]], " by Student's t-test.")) +
+        scale_y_discrete(labels = function(x) str_wrap(str_replace_all(x, "foo" , " "),
+                                                       width = 40)) +
+        coord_flip() +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+        geom_errorbar(aes(xmin = lo, xmax = hi, color = name, width = 0.1))
+      print(p)
+    }, error = function(cond) {
+      return(ggplot())
+    })
+  })
+    
+  
+  
+  output[["plot_test_t"]] <- renderPlot({ 
+    significant_t()
+  })
+  
+  output[["download_png_t"]] <- 
+    downloadHandler(filename = "significant_t_test.png",
+                    content = function(file){
+                      ggsave(file, 
+                             significant_t(), 
+                             device = "png", 
+                             height = 300,
+                             width = 700, 
+                             units = "mm")})
+  
+  significant_u <- reactive({
+    if(!input[["adjusted"]]) {
+      tmp_dat <- comparison_tests() %>% 
+        select(Compound, Case_name, AV_control, AV_case, test_U_pval) %>% 
+        rename(p_val = test_U_pval)
+    } else {
+      tmp_dat <- comparison_tests() %>% 
+        select(Compound, Case_name, AV_control, AV_case, test_U_adj_pval) %>% 
+        rename(p_val = test_U_adj_pval)
+    }
+    
+    dat_box <- data_prepared() %>% 
+      group_by(group_label, Compound) %>% 
+      mutate(lo = boxplot.stats(value)[["conf"]][1],
+             hi = boxplot.stats(value)[["conf"]][2]) %>% 
+      filter(group_label %in% c("Control", input[["group_case"]])) %>% 
+      select(Compound, group_label, lo, hi) %>% 
+      unique() %>% 
+      mutate(group_label = ifelse(group_label == "Control", "AV_control", "AV_case")) %>% 
+      rename(name = "group_label")
+    
+    tryCatch({
+      p <- tmp_dat %>% 
+        filter(Case_name == input[["group_case"]],
+               p_val < input[["sig_level"]]) %>% 
+        select(-p_val, -Case_name)   %>% 
+        pivot_longer(cols = -Compound) %>% 
+        merge(dat_box, by = c("Compound", "name")) %>% 
+        ggplot(aes(x = value, y = Compound, color = name)) +
+        geom_point() +
+        ggtitle(paste0("Significant differences AV Control vs. AV ", input[["group_case"]], " by Mann–Whitney U-test.")) +
+        scale_y_discrete(labels = function(x) str_wrap(str_replace_all(x, "foo" , " "),
+                                                       width = 40)) +
+        coord_flip() +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+        geom_errorbar(aes(xmin = lo, xmax = hi, color = name, width = 0.1))
+      
+      print(p)
+    }, error = function(cond) {
+      return(ggplot())
+    })
+    
+    
+  })
+  
+  output[["plot_test_u"]] <- renderPlot({ 
+    significant_u()
+  })
+  
+  output[["download_png_u"]] <- 
+    downloadHandler(filename = "significant_u_test.png",
+                    content = function(file){
+                      ggsave(file, 
+                             significant_u(), 
+                             device = "png", 
+                             height = 300,
+                             width = 700, 
+                             units = "mm")})
+  
+  
+  
+  # Reports
   
   output[["download_all"]] <- downloadHandler(
     filename = "report_all.pdf",
