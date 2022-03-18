@@ -271,23 +271,30 @@ server <- function(input, output, session) {
       if("Shapiro–Wilk test" %in% input[["tests"]]) {
         
         lapply(group_label, function(ith_group) {
-          lapply(compound, function(ith_compound) {
-            tmp_dat <- dat %>% 
-              filter(group_label == ith_group, Compound == ith_compound) %>%
-              pull(value)
-            
-            tryCatch({
-              shapiro.test(tmp_dat) %>%
-                getElement("p.value") %>%
-                data.frame(group_label = ith_group, 
-                           Compound = ith_compound, 
-                           pval = .)
-            }, error = function(cond) {
-              return(data.frame(group_label = ith_group, 
-                                Compound = ith_compound, 
-                                pval = NA))
+          prediction_percentage <- 0
+          withProgress(message = paste0("Shapiro-Wilk (group ", ith_group, "):"), style = "old", value = 0, {
+            shapiro_res_raw <- lapply(compound, function(ith_compound) {
+              prediction_percentage <<- prediction_percentage + 1/length(compound)*100
+              incProgress(1/length(compound), detail = paste0(round(prediction_percentage, 0), 
+                                                             "% compounds"))
+              tmp_dat <- dat %>% 
+                filter(group_label == ith_group, Compound == ith_compound) %>%
+                pull(value)
+              
+              tryCatch({
+                shapiro.test(tmp_dat) %>%
+                  getElement("p.value") %>%
+                  data.frame(group_label = ith_group, 
+                             Compound = ith_compound, 
+                             pval = .)
+              }, error = function(cond) {
+                return(data.frame(group_label = ith_group, 
+                                  Compound = ith_compound, 
+                                  pval = NA))
+              })
             })
-          }) %>% bind_rows()
+          })
+          bind_rows(shapiro_res_raw)
         }) %>%
           bind_rows() %>%
           group_by(group_label) %>% 
@@ -501,7 +508,7 @@ server <- function(input, output, session) {
       return(ggplot())
     })
   })
-    
+  
   
   
   output[["plot_test_t"]] <- renderPlot({ 

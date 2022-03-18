@@ -1,6 +1,7 @@
 
 
 ui <- fluidPage(
+  tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "progress.css")),
   mainPanel(
     tabsetPanel(id = "tabs",
                 tabPanel("Data", 
