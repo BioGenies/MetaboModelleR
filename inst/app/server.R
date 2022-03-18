@@ -233,7 +233,7 @@ server <- function(input, output, session) {
       geom_boxplot() +
       ggtitle("Boxplot")
     
-    (hist + boxplot + qqplot)* facet_wrap(~ group_label, ncol = 1, scales = "free")* 
+    ((hist + qqplot) * facet_wrap(~ group_label, ncol = 1, scales = "free") + boxplot)* 
       theme(legend.position = "bottom") + 
       plot_annotation(paste0("Compound ", input[["compound"]]))
   })
