@@ -16,7 +16,7 @@ server <- function(input, output, session) {
   groups_ok <- reactiveValues()
   sheets <- reactiveValues()
   
-  #Data 
+  #### Data ####################################################################
   
   data_selected <- reactive({
     file <- input[["data"]]
@@ -74,7 +74,7 @@ server <- function(input, output, session) {
     }
   })
   
-  # Groups
+  #### Groups ##################################################################
   
   output[["group_dt"]] <- DT::renderDataTable({
     rv_df[["group_df"]] %>% 
@@ -197,7 +197,7 @@ server <- function(input, output, session) {
   })
   
   
-  #Analysis
+  #### Analysis ################################################################
   
   output[["plot_raw_data"]] <- renderPlot({
     if(input[["transform"]] != "None") {
@@ -263,10 +263,7 @@ server <- function(input, output, session) {
     
     if(groups_ok[["is_ok"]]) {
       
-      dat <- data_prepared()
-      
-      group_label <- unique(dat[["group_label"]])
-      compound <- compounds()
+      group_label <- unique(data_prepared()[["group_label"]])
       
       if("Shapiro–Wilk test" %in% input[["tests"]]) {
         
@@ -276,14 +273,14 @@ server <- function(input, output, session) {
           withProgress(message = paste0("Shapiro-Wilk (group ", ith_group, "):"),
                        value = 0, {
                          
-                         shapiro_res_raw <- lapply(compound, function(ith_compound) {
+                         shapiro_res_raw <- lapply(compounds(), function(ith_compound) {
                            
-                           tmp_dat <- dat %>% 
+                           tmp_dat <- data_prepared() %>% 
                              filter(group_label == ith_group, Compound == ith_compound) %>%
                              pull(value)
                            
-                           prediction_percentage <<- prediction_percentage + 1/length(compound)*100
-                           incProgress(1/length(compound), 
+                           prediction_percentage <<- prediction_percentage + 1/length(compounds())*100
+                           incProgress(1/length(compounds()), 
                                        detail = paste0(round(prediction_percentage, 0), 
                                                        "% compounds"))
                            
@@ -334,112 +331,210 @@ server <- function(input, output, session) {
   comparison_tests <- reactive({
     
     if(groups_ok[["is_ok"]]) {
-      dat <- data_prepared()
-      
-      cmp <- compounds()
       
       is_paired <- input[["paired"]]
       
       prediction_percentage <- 0
       withProgress(message = "Comparison tests: ", value = 0, {
-        results <- lapply(cmp, function(ith_compound) {
-          prediction_percentage <<- prediction_percentage + 1/length(cmp)*100
-          incProgress(1/length(cmp), detail = paste0(round(prediction_percentage, 0), 
-                                                     "% compounds"))
+        
+        if(all(c("Student's t-test", "Mann–Whitney U-test") %in% input[["tests"]])) {
           
-          groups <- unique(setdiff(data_prepared()[["group_label"]], "Control"))
-          
-          lapply(groups, function(gr){
+          results <- lapply(compounds(), function(ith_compound) {
+            prediction_percentage <<- prediction_percentage + 1/length(compounds())*100
+            incProgress(1/length(compounds()), detail = paste0(round(prediction_percentage, 0), 
+                                                               "% compounds"))
+            groups <- unique(setdiff(data_prepared()[["group_label"]], 
+                                     "Control"))
             
-            tmp_dat <- dat %>% 
-              filter(Compound == ith_compound,
-                     group_label %in% c("Control", gr)) 
-            
-            avg_res <- tmp_dat %>% 
-              group_by(group_label) %>% 
-              mutate(avg = mean(value, na.rm = TRUE)) %>% 
-              select(avg, group_label) %>% 
-              unique()
-            
-            AV_control <- avg_res %>% 
-              filter(group_label == "Control") %>% 
-              pull(avg)
-            AV_case <- avg_res %>% 
-              filter(group_label == gr) %>% 
-              pull(avg)
-            p_change <- 100 * (AV_case - AV_control) / AV_control
-            FC <- AV_case / AV_control
-            
-            part_res <- data.frame(Compound = ith_compound,
-                                   Case_name = gr,
-                                   AV_control = AV_control,
-                                   AV_case = AV_case,
-                                   p_change = p_change,
-                                   FC = FC)
-            # T test
-            
-            if("Student's t-test" %in% input[["tests"]]) {
-              t_test_one_res <- tryCatch({
-                t.test(value ~ group_label, 
-                       data = tmp_dat,
-                       paired = is_paired) %>% {
-                         data.frame(test_T_pval = .[["p.value"]])
-                       } 
-                
-              }, error = function(cond) {
-                
-                data.frame(test_T_pval = NA)
-              })
+            lapply(groups, function(gr){
               
-              part_res <- cbind(part_res, t_test_one_res)
-            }
-            
-            # Wilcoxon Mann test
-            
-            if("Mann–Whitney U-test" %in% input[["tests"]]) {
+              tmp_dat <- data_prepared() %>% 
+                filter(Compound == ith_compound,
+                       group_label %in% c("Control", gr)) 
               
-              wilcoxon_one_res <- tryCatch({
-                wilcox.test(value ~ group_label, 
-                            data = tmp_dat,
-                            paired = is_paired) %>% {
-                              data.frame(test_U_pval = .[["p.value"]])
-                            }
+              avg_res <- tmp_dat %>% 
+                group_by(group_label) %>% 
+                mutate(avg = mean(value, na.rm = TRUE)) %>% 
+                select(avg, group_label) %>% 
+                unique()
+              
+              AV_control <- avg_res %>% 
+                filter(group_label == "Control") %>% 
+                pull(avg)
+              AV_case <- avg_res %>% 
+                filter(group_label == gr) %>% 
+                pull(avg)
+              p_change <- 100 * (AV_case - AV_control) / AV_control
+              FC <- AV_case / AV_control
+              
+              part_res <- data.frame(Compound = ith_compound,
+                                     Case_name = gr,
+                                     AV_control = AV_control,
+                                     AV_case = AV_case,
+                                     p_change = p_change,
+                                     FC = FC)
+              # T test
+              
+              if("Student's t-test" %in% input[["tests"]]) {
+                t_test_one_res <- tryCatch({
+                  t.test(value ~ group_label, 
+                         data = tmp_dat,
+                         paired = is_paired) %>% {
+                           data.frame(test_T_pval = .[["p.value"]])
+                         } 
+                  
+                }, error = function(cond) {
+                  
+                  data.frame(test_T_pval = NA)
+                })
+                part_res <- cbind(part_res, t_test_one_res)
+              }
+              
+              # Wilcoxon Mann test
+              
+              if("Mann–Whitney U-test" %in% input[["tests"]]) {
                 
-              }, error = function(cond) {
-                
-                data.frame(test_U_pval = NA)
-              })
-              
-              part_res <- cbind(part_res, wilcoxon_one_res)
-              
-            }
-            
-            part_res
-            
+                wilcoxon_one_res <- tryCatch({
+                  wilcox.test(value ~ group_label, 
+                              data = tmp_dat,
+                              paired = is_paired) %>% {
+                                data.frame(test_U_pval = .[["p.value"]])
+                              }
+                }, error = function(cond) {
+                  
+                  data.frame(test_U_pval = NA)
+                })
+                part_res <- cbind(part_res, wilcoxon_one_res)
+              }
+              part_res
+            }) %>% 
+              bind_rows()
           }) %>% 
-            bind_rows()
+            bind_rows() %>% 
+            mutate(test_T_adj_pval = p.adjust(test_T_pval, method = "BH")) %>% 
+            mutate(test_U_adj_pval = p.adjust(test_U_pval, method = "BH")) %>% 
+            relocate(test_U_pval, .after = test_T_adj_pval)
           
-        }) %>% 
-          bind_rows()
+        }else {
+          if("Student's t-test" %in% input[["tests"]]) {
+            
+            results <- lapply(compounds(), function(ith_compound) {
+              prediction_percentage <<- prediction_percentage + 1/length(compounds())*100
+              incProgress(1/length(compounds()), detail = paste0(round(prediction_percentage, 0), 
+                                                                 "% compounds"))
+              groups <- unique(setdiff(data_prepared()[["group_label"]], "Control"))
+              
+              lapply(groups, function(gr){
+                
+                tmp_dat <- data_prepared() %>% 
+                  filter(Compound == ith_compound,
+                         group_label %in% c("Control", gr)) 
+                
+                avg_res <- tmp_dat %>% 
+                  group_by(group_label) %>% 
+                  mutate(avg = mean(value, na.rm = TRUE)) %>% 
+                  select(avg, group_label) %>% 
+                  unique()
+                
+                AV_control <- avg_res %>% 
+                  filter(group_label == "Control") %>% 
+                  pull(avg)
+                AV_case <- avg_res %>% 
+                  filter(group_label == gr) %>% 
+                  pull(avg)
+                p_change <- 100 * (AV_case - AV_control) / AV_control
+                FC <- AV_case / AV_control
+                
+                part_res <- data.frame(Compound = ith_compound,
+                                       Case_name = gr,
+                                       AV_control = AV_control,
+                                       AV_case = AV_case,
+                                       p_change = p_change,
+                                       FC = FC)
+                # T test
+                
+                if("Student's t-test" %in% input[["tests"]]) {
+                  t_test_one_res <- tryCatch({
+                    t.test(value ~ group_label, 
+                           data = tmp_dat,
+                           paired = is_paired) %>% {
+                             data.frame(test_T_pval = .[["p.value"]])
+                           } 
+                    
+                  }, error = function(cond) data.frame(test_T_pval = NA))
+                  
+                  part_res <- cbind(part_res, t_test_one_res)
+                }
+                part_res
+              }) %>% 
+                bind_rows()
+            }) %>% 
+              bind_rows() %>% 
+              mutate(test_T_adj_pval = p.adjust(test_T_pval, method = "BH"))
+            
+          }
+          
+          if("Mann–Whitney U-test" %in% input[["tests"]]) {
+            
+            results <- lapply(compounds(), function(ith_compound) {
+              prediction_percentage <<- prediction_percentage + 1/length(compounds())*100
+              incProgress(1/length(compounds()), detail = paste0(round(prediction_percentage, 0), 
+                                                                 "% compounds"))
+              groups <- unique(setdiff(data_prepared()[["group_label"]], "Control"))
+              
+              lapply(groups, function(gr){
+                
+                tmp_dat <- data_prepared() %>% 
+                  filter(Compound == ith_compound,
+                         group_label %in% c("Control", gr)) 
+                
+                avg_res <- tmp_dat %>% 
+                  group_by(group_label) %>% 
+                  mutate(avg = mean(value, na.rm = TRUE)) %>% 
+                  select(avg, group_label) %>% 
+                  unique()
+                
+                AV_control <- avg_res %>% 
+                  filter(group_label == "Control") %>% 
+                  pull(avg)
+                AV_case <- avg_res %>% 
+                  filter(group_label == gr) %>% 
+                  pull(avg)
+                p_change <- 100 * (AV_case - AV_control) / AV_control
+                FC <- AV_case / AV_control
+                
+                part_res <- data.frame(Compound = ith_compound,
+                                       Case_name = gr,
+                                       AV_control = AV_control,
+                                       AV_case = AV_case,
+                                       p_change = p_change,
+                                       FC = FC)
+                
+                # Wilcoxon Mann test
+                
+                if("Mann–Whitney U-test" %in% input[["tests"]]) {
+                  
+                  wilcoxon_one_res <- tryCatch({
+                    wilcox.test(value ~ group_label, 
+                                data = tmp_dat,
+                                paired = is_paired) %>% {
+                                  data.frame(test_U_pval = .[["p.value"]])
+                                }
+                    
+                  }, error = function(cond) data.frame(test_U_pval = NA))
+                  part_res <- cbind(part_res, wilcoxon_one_res)
+                }
+                part_res
+              }) %>% 
+                bind_rows()
+            }) %>% 
+              bind_rows() %>% 
+              mutate(test_U_adj_pval = p.adjust(test_U_pval, method = "BH"))
+          }
+        }
       })
       
-      
-      if("Student's t-test" %in% input[["tests"]]) {
-        results <- results %>% 
-          mutate(test_T_adj_pval = p.adjust(test_T_pval, method = "BH"))
-      }
-      
-      if("Mann–Whitney U-test" %in% input[["tests"]]) {
-        results <- results %>% 
-          mutate(test_U_adj_pval = p.adjust(test_U_pval, method = "BH"))
-      }
-      
-      if(all(c("Mann–Whitney U-test", "Student's t-test")  %in% input[["tests"]])) {
-        results <- results %>% 
-          relocate(test_U_pval, .after = test_T_adj_pval)
-      }
       results
-      
       
     } else {
       
@@ -465,18 +560,22 @@ server <- function(input, output, session) {
     comparison_out()
   })
   
-  # Summary
+  #### Summary #################################################################
+  
+  n_significant <- reactiveValues()
+  n_significant[["t"]] <- 1
+  n_significant[["u"]] <- 1
   
   observe({
     if(input[["tabs"]] == "Analysis") {
       updateSelectInput(session,
                         "group_case",
-                        choices = setdiff(data_prepared()[["group_label"]], "Control"),
-                        selected = setdiff(data_prepared()[["group_label"]], "Control")[1])
+                        choices = setdiff(data_prepared()[["group_label"]], 
+                                          "Control"),
+                        selected = setdiff(data_prepared()[["group_label"]], 
+                                           "Control")[1])
     }
   })
-  
-  
   
   significant_t <- reactive({
     
@@ -490,6 +589,12 @@ server <- function(input, output, session) {
         rename(p_val = test_T_adj_pval)
     }
     
+    n_significant[["t"]] <- tmp_dat %>% 
+      filter(Case_name == input[["group_case"]],
+             p_val < input[["sig_level"]]) %>% 
+      nrow()
+    
+    
     dat_box <- data_prepared() %>% 
       group_by(group_label, Compound) %>% 
       mutate(lo = boxplot.stats(value)[["conf"]][1],
@@ -497,7 +602,9 @@ server <- function(input, output, session) {
       filter(group_label %in% c("Control", input[["group_case"]])) %>% 
       select(Compound, group_label, lo, hi) %>% 
       unique() %>% 
-      mutate(group_label = ifelse(group_label == "Control", "AV_control", "AV_case")) %>% 
+      mutate(group_label = ifelse(group_label == "Control", 
+                                  "AV_control", 
+                                  "AV_case")) %>% 
       rename(name = "group_label")
     
     tryCatch({
@@ -507,14 +614,20 @@ server <- function(input, output, session) {
         select(-p_val, -Case_name)   %>% 
         pivot_longer(cols = -Compound) %>% 
         merge(dat_box, by = c("Compound", "name")) %>% 
+        mutate(Compound = str_wrap(str_replace_all(Compound, "foo" , " "), width = 20)) %>% 
         ggplot(aes(x = value, y = Compound, color = name)) +
         geom_point() +
-        ggtitle(paste0("Significant differences AV Control vs. AV ", input[["group_case"]], " by Student's t-test.")) +
-        scale_y_discrete(labels = function(x) str_wrap(str_replace_all(x, "foo" , " "),
-                                                       width = 40)) +
+        ggtitle(str_wrap(str_replace_all(paste0("Significant differences AV Control vs. AV ", 
+                                                input[["group_case"]], 
+                                                " by Student's t-test."), 
+                                         "foo" , 
+                                         " "), 
+                         width =  1 + n_significant[["t"]]*40)) +
         coord_flip() +
-        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-        geom_errorbar(aes(xmin = lo, xmax = hi, color = name, width = 0.1))
+        theme(axis.text.x = element_blank()) +
+        geom_errorbar(aes(xmin = lo, xmax = hi, color = name, width = 0.1)) +
+        facet_wrap(~Compound, nrow = 1, scales = "free") +
+        theme(legend.position = "left")
       print(p)
     }, error = function(cond) {
       return(ggplot())
@@ -522,10 +635,16 @@ server <- function(input, output, session) {
   })
   
   
-  
-  output[["plot_test_t"]] <- renderPlot({ 
+  output[["plot_test_t"]] <- renderPlot({
     significant_t()
   })
+  
+  output[["plot_test_t_ui"]] <- renderUI({
+    width <- 200 + n_significant[["t"]] * 150
+    plotOutput("plot_test_t", width = width)
+  })
+  
+  
   
   output[["download_png_t"]] <- 
     downloadHandler(filename = "significant_t_test.png",
@@ -548,6 +667,11 @@ server <- function(input, output, session) {
         rename(p_val = test_U_adj_pval)
     }
     
+    n_significant[["u"]] <- tmp_dat %>% 
+      filter(Case_name == input[["group_case"]],
+             p_val < input[["sig_level"]]) %>% 
+      nrow()
+    
     dat_box <- data_prepared() %>% 
       group_by(group_label, Compound) %>% 
       mutate(lo = boxplot.stats(value)[["conf"]][1],
@@ -565,25 +689,34 @@ server <- function(input, output, session) {
         select(-p_val, -Case_name)   %>% 
         pivot_longer(cols = -Compound) %>% 
         merge(dat_box, by = c("Compound", "name")) %>% 
+        mutate(Compound = str_wrap(str_replace_all(Compound, "foo" , " "), width = 20)) %>% 
         ggplot(aes(x = value, y = Compound, color = name)) +
         geom_point() +
-        ggtitle(paste0("Significant differences AV Control vs. AV ", input[["group_case"]], " by Mann–Whitney U-test.")) +
-        scale_y_discrete(labels = function(x) str_wrap(str_replace_all(x, "foo" , " "),
-                                                       width = 40)) +
+        ggtitle(str_wrap(str_replace_all(paste0("Significant differences AV Control vs. AV ", 
+                                                input[["group_case"]], 
+                                                " by Mann–Whitney U-test."), 
+                                         "foo" , 
+                                         " "), 
+                         width = 1 + n_significant[["u"]]*40)) +
         coord_flip() +
-        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-        geom_errorbar(aes(xmin = lo, xmax = hi, color = name, width = 0.1))
+        theme(axis.text.x = element_blank()) +
+        geom_errorbar(aes(xmin = lo, xmax = hi, color = name, width = 0.1)) +
+        facet_wrap(~Compound, nrow = 1, scales = "free") +
+        theme(legend.position = "left")
       
       print(p)
     }, error = function(cond) {
       return(ggplot())
     })
-    
-    
   })
   
-  output[["plot_test_u"]] <- renderPlot({ 
+  output[["plot_test_u"]] <- renderPlot({
     significant_u()
+  })
+  
+  output[["plot_test_u_ui"]] <- renderUI({
+    width <- 200 + n_significant[["u"]] * 150
+    plotOutput("plot_test_u", width = width)
   })
   
   output[["download_png_u"]] <- 
@@ -598,7 +731,7 @@ server <- function(input, output, session) {
   
   
   
-  # Reports
+  #### Reports #################################################################
   
   output[["download_all"]] <- downloadHandler(
     filename = "report_all.pdf",
@@ -648,12 +781,14 @@ server <- function(input, output, session) {
                              dom = "tBip",
                              autoWidth = TRUE,
                              buttons = list( 
-                               list(extend = 'excel', filename = "shapiro_results"),
-                               list(extend = 'csv', filename =  "shapiro_results")
+                               list(extend = 'excel', 
+                                    filename = "shapiro_results"),
+                               list(extend = 'csv', 
+                                    filename =  "shapiro_results")
                              )
               ),
               filter = "bottom",
-              rownames = FALSE)
+              rownames = FALSE) 
   }, server = FALSE)
   
   output[["tests_table"]] <- DT::renderDataTable({
@@ -664,8 +799,10 @@ server <- function(input, output, session) {
                              dom = "tBip",
                              autoWidth = TRUE,
                              buttons = list( 
-                               list(extend = 'excel', filename = "comparison_results"),
-                               list(extend = 'csv', filename =  "comparison_results")
+                               list(extend = 'excel', 
+                                    filename = "comparison_results"),
+                               list(extend = 'csv', 
+                                    filename =  "comparison_results")
                              )
               ),
               filter = "bottom",
