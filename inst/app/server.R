@@ -542,6 +542,49 @@ server <- function(input, output, session) {
     }
   })
   
+  statistics <- reactive({
+    
+    if(groups_ok[["is_ok"]]) {
+      
+      prediction_percentage <- 0
+      withProgress(message = "Statistics: ", value = 0, {
+        
+        results <- lapply(compounds(), function(ith_compound) {
+          prediction_percentage <<- prediction_percentage + 1/length(compounds())*100
+          incProgress(1/length(compounds()), detail = paste0(round(prediction_percentage, 0), 
+                                                           "% compounds"))
+          tryCatch({
+            data_prepared() %>% 
+              filter(Compound == ith_compound) %>% 
+              group_by(group_label) %>% 
+              summarise(SE = sqrt(var(value) / length(value)),
+                        MAD = mad(value),
+                        Min = min(value),
+                        Median = median(value),
+                        Max = max(value),
+                        IQR = IQR(value), 
+                        Compound = ith_compound)
+          },
+          error = function(e) {
+            return(data.frame())
+          })
+
+        }) %>% 
+          bind_rows()
+      })
+    }
+  })  
+  
+  
+  output[["stat"]] <- renderTable({
+    statistics() %>% 
+      filter(Compound == input[["compound"]]) %>% 
+      select(-Compound)
+  })
+  
+  
+  
+  
   comparison_out <- reactive({
     
     if(is.data.frame(comparison_tests())) {
