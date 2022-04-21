@@ -55,6 +55,45 @@ server <- function(input, output, session) {
     
   })
   
+  data_imputed <- reactive({
+    imputation_method <- input[["imputation"]]
+    dat <- data_selected()
+    compound <- dat[, 1]
+    dat_missing <- dat[, -1]
+    result <- switch (imputation_method,
+                      kNN = {
+                        impute::impute.knn(as.matrix(dat_missing))[["data"]]
+                      },
+                      zeros = {
+                        dat_missing[is.na(dat_missing)] <- 0
+                        dat_missing
+                      },
+                      median = {
+                        dat_missing %>%
+                          t() %>%
+                          as_tibble() %>% 
+                          mutate_if(is.numeric, function(x){
+                            ifelse(is.na(x), median(x, na.rm = T), x)
+                          }) %>% 
+                          t() %>% 
+                          as_tibble()
+                      },
+                      `1/2 minimum` = {
+                        dat_missing %>%
+                          t() %>% 
+                          as_tibble() %>% 
+                          mutate_if(is.numeric, function(x){
+                            ifelse(is.na(x), 0.5*min(x, na.rm = T), x)
+                          }) %>% 
+                          t() %>% 
+                          as_tibble()
+                      }
+    )
+    result <- cbind(compound, result)
+    colnames(result) <- colnames(dat)
+    result
+  })
+  
   observe({
     updateSelectInput(session, 
                       "sheet", 
@@ -63,7 +102,7 @@ server <- function(input, output, session) {
   
   
   output[["data_selected"]] <- renderTable({
-    head(data_selected())
+    head(data_imputed())
   })
   
   observe({
@@ -83,9 +122,9 @@ server <- function(input, output, session) {
                     colnames = c("Sample name", "Group"))
   })
   
-  observeEvent(data_selected(), {
+  observeEvent(data_imputed(), {
     rv_df[["group_df"]] <- 
-      data.frame(sample_name = setdiff(colnames(data_selected()), 
+      data.frame(sample_name = setdiff(colnames(data_imputed()), 
                                        "Compound")) %>% 
       mutate(group = "Control")
   })
@@ -99,10 +138,10 @@ server <- function(input, output, session) {
   data_prepared_tmp <- reactive({
     if(!error[["error"]]) {
       group_vector <- setNames(rv_df[["group_df"]][["group"]], 
-                               setdiff(colnames(data_selected()), 
+                               setdiff(colnames(data_imputed()), 
                                        "Compound"))
       
-      data_selected()  %>%
+      data_imputed()  %>%
         mutate(Compound = as.factor(Compound)) %>% 
         mutate(across(everything(), ~replace(., . ==  "NaN" , NA))) %>% 
         mutate_at(vars(-("Compound")), as.numeric) %>% 
@@ -552,7 +591,7 @@ server <- function(input, output, session) {
         results <- lapply(compounds(), function(ith_compound) {
           prediction_percentage <<- prediction_percentage + 1/length(compounds())*100
           incProgress(1/length(compounds()), detail = paste0(round(prediction_percentage, 0), 
-                                                           "% compounds"))
+                                                             "% compounds"))
           tryCatch({
             data_prepared() %>% 
               filter(Compound == ith_compound) %>% 
@@ -568,7 +607,7 @@ server <- function(input, output, session) {
           error = function(e) {
             return(data.frame())
           })
-
+          
         }) %>% 
           bind_rows()
       })
