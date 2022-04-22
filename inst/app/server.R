@@ -1,3 +1,4 @@
+library(easyR)
 library(readxl)
 library(dplyr)
 library(tidyr)
@@ -6,6 +7,8 @@ library(patchwork)
 library(stringr)
 library(DT)
 library(shinycssloaders)
+library(impute)
+
 source("ui.R")
 
 server <- function(input, output, session) {
@@ -57,41 +60,7 @@ server <- function(input, output, session) {
   
   data_imputed <- reactive({
     imputation_method <- input[["imputation"]]
-    dat <- data_selected()
-    compound <- dat[, 1]
-    dat_missing <- dat[, -1]
-    result <- switch (imputation_method,
-                      kNN = {
-                        impute::impute.knn(as.matrix(dat_missing))[["data"]]
-                      },
-                      zeros = {
-                        dat_missing[is.na(dat_missing)] <- 0
-                        dat_missing
-                      },
-                      median = {
-                        dat_missing %>%
-                          t() %>%
-                          as_tibble() %>% 
-                          mutate_if(is.numeric, function(x){
-                            ifelse(is.na(x), median(x, na.rm = T), x)
-                          }) %>% 
-                          t() %>% 
-                          as_tibble()
-                      },
-                      `1/2 minimum` = {
-                        dat_missing %>%
-                          t() %>% 
-                          as_tibble() %>% 
-                          mutate_if(is.numeric, function(x){
-                            ifelse(is.na(x), 0.5*min(x, na.rm = T), x)
-                          }) %>% 
-                          t() %>% 
-                          as_tibble()
-                      }
-    )
-    result <- cbind(compound, result)
-    colnames(result) <- colnames(dat)
-    result
+    complete_data(data_selected(), imputation_method)
   })
   
   observe({

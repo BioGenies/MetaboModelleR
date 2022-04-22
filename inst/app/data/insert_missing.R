@@ -1,5 +1,6 @@
 
 library(readxl)
+library(xlsx)
 
 lose_some_dat <- function(dat, pctg) {
   Compound <- dat[, 1]
@@ -11,7 +12,7 @@ lose_some_dat <- function(dat, pctg) {
   dat[matrix(NAloc, nrow = n, ncol = p)] <- NA
   
   cbind(Compound, dat)
-  }
+}
 
 insert_and_save <- function(complete_file, missing_file, pctg = 0.1) {
   dat <- read_excel(complete_file)
@@ -19,17 +20,22 @@ insert_and_save <- function(complete_file, missing_file, pctg = 0.1) {
   dat <- lose_some_dat(dat = dat, 
                        pctg = pctg)
   
-  write.csv(dat, paste0("./missing/", missing_file), )
+  write.xlsx(dat, paste0("./missing/", 
+                         missing_file), 
+             sheetName = "Sheet1", 
+             col.names = TRUE, 
+             row.names = FALSE, 
+             append = FALSE)
 }
 
 
 set.seed(17)
 
 insert_and_save("Example_paired.xlsx", 
-                "Example_paired_missing.csv")
+                "Example_paired_missing.xlsx")
 
 insert_and_save("Example.xlsx", 
-                "Example_missing.csv")
+                "Example_missing.xlsx")
 
 insert_and_save("Statystyka_pigs_EDTA.xlsx", 
-                "Statystyka_pigs_EDTA_missing.csv")
+                "Statystyka_pigs_EDTA_missing.xlsx")
