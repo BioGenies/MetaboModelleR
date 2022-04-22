@@ -10,26 +10,20 @@ ui <- navbarPage(id = "tabs",
                                          left: calc(30%);
                                          }
                                          "),
-                          column(2,
-                                 fileInput("data", "Choose .xlsx file:",
-                                           multiple = FALSE,
-                                           accept = c(".xlsx"))
-                          ),
-                          column(10,
-                                 selectInput(inputId = "imputation",
-                                             label = "Choose imputation method:",
-                                             choices = c("zeros",
-                                                         "median",
-                                                         "1/2 minimum",
-                                                         "kNN"),
-                                             selected = "kNN")
-                          ),
-                          
+                          fileInput("data", "Choose .xlsx file:",
+                                    multiple = FALSE,
+                                    accept = c(".xlsx")),
                           selectInput("sheet", 
                                       "Select sheet:", 
                                       choices = NULL,
                                       selected = NULL),
-                          
+                          selectInput(inputId = "imputation",
+                                      label = "Choose imputation method:",
+                                      choices = c("zeros",
+                                                  "median",
+                                                  "1/2 minimum",
+                                                  "kNN"),
+                                      selected = "kNN"),
                           h3("Selected:"),
                           verbatimTextOutput("error_compound"),
                           tableOutput("data_selected")
