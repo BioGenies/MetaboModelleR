@@ -145,6 +145,9 @@ ui <- navbarPage(id = "tabs",
                           br(),
                           h4("Between groups comparison"),
                           shinycssloaders::withSpinner(DT::dataTableOutput("tests_table"), 
+                                                       color = "#479F8D"),
+                          h4("Imputed data"),
+                          shinycssloaders::withSpinner(DT::dataTableOutput("data_imputed_table"), 
                                                        color = "#479F8D")
                           
                           

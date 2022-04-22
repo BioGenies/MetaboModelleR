@@ -891,4 +891,22 @@ server <- function(input, output, session) {
               rownames = FALSE)
   }, server = FALSE)
   
+  output[["data_imputed_table"]] <- DT::renderDataTable({
+    datatable(data = data_imputed(),
+              class = "table-bordered table-condensed",
+              extensions = "Buttons",
+              options = list(pageLength = 5,
+                             dom = "tBip",
+                             autoWidth = TRUE,
+                             buttons = list( 
+                               list(extend = 'excel', 
+                                    filename = "imputed_data"),
+                               list(extend = 'csv', 
+                                    filename =  "imputed_data")
+                             )
+              ),
+              filter = "bottom",
+              rownames = FALSE)
+  }, server = FALSE)
+  
 }
