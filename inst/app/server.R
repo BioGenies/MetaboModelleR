@@ -13,6 +13,13 @@ source("ui.R")
 
 server <- function(input, output, session) {
   
+  if (!interactive()) {
+    session$onSessionEnded(function() {
+      stopApp()
+      q("no")
+    })
+  }
+  
   rv_df <- reactiveValues()
   error <- reactiveValues()
   error[["error"]] <- TRUE
@@ -25,8 +32,8 @@ server <- function(input, output, session) {
     file <- input[["data"]]
     ext <- tools::file_ext(file[["datapath"]])
     
-    req(file)
-    validate(need(ext == "xlsx", "Please upload a xlsx file"))
+    validate(need(ext == "xlsx", "Please upload a xlsx file"),
+             need(input[["data"]], "Please upload data"))
     
     sheets[["sheets"]] <- readxl::excel_sheets(file[["datapath"]])
     
@@ -85,6 +92,8 @@ server <- function(input, output, session) {
   #### Groups ##################################################################
   
   output[["group_dt"]] <- DT::renderDataTable({
+    validate(need(rv_df[["group_df"]], "Please upload data"))
+    
     rv_df[["group_df"]] %>% 
       DT::datatable(editable = FALSE, 
                     options = list(paging = FALSE),
@@ -120,6 +129,7 @@ server <- function(input, output, session) {
   })
   
   data_prepared <- reactive({
+    
     switch(input[["transform"]],
            None = {
              data_prepared_tmp()
