@@ -1,7 +1,7 @@
 
 
 ui <- navbarPage(id = "tabs",
-                 title = "easyR",
+                 title = "MetaboModelleR",
                  tabPanel("Data", 
                           tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "style.css")),
                           tags$style(".shiny-notification {
