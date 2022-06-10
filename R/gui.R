@@ -8,7 +8,7 @@
 #' 
 #' @section Warning : Any ad-blocking software may cause malfunctions.
 #' 
-#' @export easyR_gui
+#' @export run_MetaboModelleR
 
-easyR_gui <- function(port = getOption("shiny.port"))
-  runApp(system.file("app", package = "easyR"), port = port, launch.browser = TRUE)
+run_MetaboModelleR <- function(port = getOption("shiny.port"))
+  runApp(system.file("app", package = "MetaboModelleR"), port = port, launch.browser = TRUE)

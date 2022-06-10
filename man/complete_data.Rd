@@ -9,12 +9,13 @@ complete_data(dat, method = "kNN")
 \arguments{
 \item{dat}{metabolomic data. Should contain \code{Compound} column.}
 
-\item{method}{imputation method. See details for more information.}
+\item{method}{imputation method. One of "kNN", "zeros", "median",
+"1/2 minimum".}
 }
 \value{
 completed data frame.
 }
 \description{
-This function completes the metabolomic data using four
+This function completes the metabolomics data using four
 approaches of imputation.
 }

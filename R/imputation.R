@@ -5,11 +5,12 @@
 #' @importFrom stats median
 #' @importFrom shiny showNotification
 #'
-#' @description This function completes the metabolomic data using four 
+#' @description This function completes the metabolomics data using four 
 #' approaches of imputation.
 #'
 #' @param dat metabolomic data. Should contain `Compound` column.
-#' @param method imputation method. See details for more information.
+#' @param method imputation method. One of "kNN", "zeros", "median", 
+#' "1/2 minimum". 
 #'
 #' @return completed data frame. 
 #'
@@ -18,6 +19,9 @@
 
 complete_data <- function(dat, 
                           method = "kNN") {
+  
+  match.arg(method, c("kNN", "zeros", "median", "1/2 minimum"))
+  
   Compound <- dat[["Compound"]]
   dat_missing <- dat[, -(colnames(dat) == "Compound")]
   

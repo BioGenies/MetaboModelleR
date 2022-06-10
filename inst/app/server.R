@@ -1,4 +1,4 @@
-library(easyR)
+library(MetaboModelleR)
 library(readxl)
 library(dplyr)
 library(tidyr)
