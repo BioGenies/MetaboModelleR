@@ -1,4 +1,4 @@
 library(testthat)
-library(easyR)
+library(MetaboModelleR)
 
-test_check("easyR")
+test_check("MetaboModelleR")
