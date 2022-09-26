@@ -11,6 +11,9 @@ library(impute)
 
 source("ui.R")
 
+
+
+
 server <- function(input, output, session) {
   
   if (!interactive()) {
@@ -86,6 +89,8 @@ server <- function(input, output, session) {
     if(!error[["error"]]) {
       updateSelectInput(session, "compound", 
                         choices = unique(dat[["Compound"]]))
+      updateSelectInput(session, "compound_transform", 
+                        choices = unique(dat[["Compound"]]))
     }
   })
   
@@ -113,7 +118,7 @@ server <- function(input, output, session) {
   })
   
   
-  data_prepared_tmp <- reactive({
+  data_prepared <- reactive({
     if(!error[["error"]]) {
       group_vector <- setNames(rv_df[["group_df"]][["group"]], 
                                setdiff(colnames(data_imputed()), 
@@ -214,48 +219,104 @@ server <- function(input, output, session) {
     
   })
   
+  #### Distribution ############################################################
   
-  #### Analysis ################################################################
+  data_transformation <- reactive({
+    data_prepared() %>% 
+      select(Compound) %>% 
+      unique() %>% 
+      mutate(Transformation = "None") 
+  })
   
-  output[["plot_raw_data"]] <- renderPlot({
-    if(input[["transform"]] != "None") {
-      dat <- data_prepared_tmp() %>% 
-        filter(Compound == input[["compound"]])
-      
-      ggplot(dat, aes(x = value, fill = group_label)) + 
-        geom_histogram() +
-        xlab("") +
-        ggtitle("Data before transformation") +
-        facet_wrap(~ group_label, ncol = 1)
+  
+  output[["transformation_df"]] <- DT::renderDataTable({
+    rv_df[["transformation_df"]] %>% 
+      DT::datatable(editable = FALSE, 
+                    selection = list(mode = "single", selected = list(rows = 1)),
+                    options = list(paging = FALSE),
+                    colnames = c("Sample name", "Group"))
+  })
+  
+  observeEvent(data_prepared(), {
+    rv_df[["transformation_df"]] <- 
+      data_transformation()
+  })
+  
+  observeEvent(input[["apply_transformation"]], {
+    rv_df[["transformation_df"]][input[["transformation_df_rows_selected"]], "Transformation"] <- 
+      input[["transform"]]
+    
+  })
+  
+  observeEvent(input[["transformation_df_rows_selected"]], {
+    updateRadioButtons(session,
+                       "transform",
+                       selected = pull(rv_df[["transformation_df"]][input[["transformation_df_rows_selected"]], "Transformation"]))
+    
+  })
+  
+  transformed_compound <- reactive({
+    
+    if(is.null(input[["transformation_df_rows_selected"]])) {
+      pull(rv_df[["transformation_df"]][1, "Compound"])
+    }else {
+      pull(rv_df[["transformation_df"]][input[["transformation_df_rows_selected"]], "Compound"])
     }
   })
   
   
+  
+  data_transformed_one_cmp <- reactive({
+    dat_to_transform <- data_prepared() %>% 
+      filter(Compound == transformed_compound())
+    
+    switch(input[["transform"]],
+           None = {
+             dat_to_transform
+           },
+           Logarithm = {
+             dat_to_transform %>%
+               mutate(value = log(value))
+           },
+           `Square-Root` = {
+             dat_to_transform %>%
+               mutate(value = sqrt(value))
+           },
+           Reciprocal = {
+             dat_to_transform %>%
+               mutate(value = 1/value)
+           },
+           `Inverse hyperbolic sine` = {
+             dat_to_transform %>%
+               mutate(value = asinh(value))
+           })
+  })
+  
+  
   plot_out <- reactive({
-    dat <- data_prepared() %>% 
-      filter(Compound == input[["compound"]])
-    
+
+    dat <- data_transformed_one_cmp()
+
     group_label <- unique(dat[["group_label"]])
-    
-    hist <- ggplot(dat, aes(x = value, fill = group_label)) + 
+
+    hist <- ggplot(dat, aes(x = value, fill = group_label)) +
       geom_histogram() +
       xlab("") +
       ggtitle("Histogram")
-    
-    qqplot <- ggplot(dat, aes(sample = value, color = group_label)) + 
-      stat_qq() + 
+
+    qqplot <- ggplot(dat, aes(sample = value, color = group_label)) +
+      stat_qq() +
       stat_qq_line() +
       ggtitle("Quantile-quantile chart")
-    
+
     boxplot <- ggplot(dat, aes(x = "", y = value, fill = group_label)) +
       geom_boxplot() +
       ggtitle("Boxplot")
-    
-    ((hist + qqplot) * facet_wrap(~ group_label, ncol = 1, scales = "free") + boxplot)* 
-      theme(legend.position = "bottom") + 
-      plot_annotation(paste0("Compound ", input[["compound"]]))
+
+    ((hist + qqplot) * facet_wrap(~ group_label, ncol = 1, scales = "free") + boxplot)*
+      theme(legend.position = "bottom") +
+      plot_annotation(paste0("Compound ", transformed_compound(), ". Transformation ", input[["transform"]]))
   })
-  
   
   output[["dist_plot"]] <- renderPlot({
     if(groups_ok[["is_ok"]]) {
@@ -263,88 +324,143 @@ server <- function(input, output, session) {
     }
   })
   
+  
+  
+  
+  
+  
+  
+  # 
+  # 
+  # 
+  
+  # 
+  # 
+  # shapiro_res <- reactive({
+  #   
+  #   if(groups_ok[["is_ok"]]) {
+  #     
+  #     group_label <- unique(data_transformed()[["group_label"]])
+  #     
+  #     lapply(group_label, function(ith_group) {
+  #       prediction_percentage <- 0
+  #       
+  #       withProgress(message = paste0("Shapiro-Wilk (group ", ith_group, "):"),
+  #                    value = 0, {
+  #                      
+  #                      shapiro_res_raw <- lapply(compounds(), function(ith_compound) {
+  #                        
+  #                        tmp_dat <- data_transformed() %>% 
+  #                          filter(group_label == ith_group, Compound == ith_compound) %>%
+  #                          pull(value)
+  #                        
+  #                        prediction_percentage <<- prediction_percentage + 1/length(compounds())*100
+  #                        incProgress(1/length(compounds()), 
+  #                                    detail = paste0(round(prediction_percentage, 0), 
+  #                                                    "% compounds"))
+  #                        
+  #                        tryCatch({
+  #                          shapiro.test(tmp_dat) %>%
+  #                            getElement("p.value") %>%
+  #                            data.frame(group_label = ith_group, 
+  #                                       Compound = ith_compound, 
+  #                                       pval = .)
+  #                        }, error = function(cond) {
+  #                          return(data.frame(group_label = ith_group, 
+  #                                            Compound = ith_compound, 
+  #                                            pval = NA))
+  #                        })
+  #                      })
+  #                    })
+  #       bind_rows(shapiro_res_raw)
+  #     }) %>%
+  #       bind_rows() %>%
+  #       group_by(group_label) %>% 
+  #       mutate(adjusted_pval = p.adjust(pval, method = "BH"),
+  #              transformation = input[["transform"]])
+  #     
+  #   } else {
+  #     return("Invalid groups!")
+  #   }
+  # })
+  # 
+  # shapiro_out <- reactive({
+  #   if(is.data.frame(shapiro_res())) {
+  #     shapiro_res() %>% 
+  #       filter(Compound == input[["compound_transform"]]) %>% 
+  #       select(-Compound)
+  #   } else {
+  #     
+  #     shapiro_res()
+  #   }
+  # })
+  # 
+  # output[["shapiro"]] <- renderTable({
+  #   shapiro_out()
+  # })
+  # 
+  # output[["plot_raw_data"]] <- renderPlot({
+  #   if(input[["transform"]] != "None") {
+  #     dat <- data_prepared() %>% 
+  #       filter(Compound == input[["compound"]])
+  #     
+  #     ggplot(dat, aes(x = value, fill = group_label)) + 
+  #       geom_histogram() +
+  #       xlab("") +
+  #       ggtitle("Data before transformation") +
+  #       facet_wrap(~ group_label, ncol = 1)
+  #   }
+  # })
+  # 
+  # 
+  # plot_out <- reactive({
+  #   dat <- data_transformed() %>% 
+  #     filter(Compound == input[["compound_transform"]])
+  #   
+  #   group_label <- unique(dat[["group_label"]])
+  #   
+  #   hist <- ggplot(dat, aes(x = value, fill = group_label)) + 
+  #     geom_histogram() +
+  #     xlab("") +
+  #     ggtitle("Histogram")
+  #   
+  #   qqplot <- ggplot(dat, aes(sample = value, color = group_label)) + 
+  #     stat_qq() + 
+  #     stat_qq_line() +
+  #     ggtitle("Quantile-quantile chart")
+  #   
+  #   boxplot <- ggplot(dat, aes(x = "", y = value, fill = group_label)) +
+  #     geom_boxplot() +
+  #     ggtitle("Boxplot")
+  #   
+  #   ((hist + qqplot) * facet_wrap(~ group_label, ncol = 1, scales = "free") + boxplot)* 
+  #     theme(legend.position = "bottom") + 
+  #     plot_annotation(paste0("Compound ", input[["compound_transform"]]))
+  # })
+  # 
+  # 
+
+  # 
+  # output[["download_png"]] <- 
+  #   downloadHandler(filename = function() paste0(cmp_name(), "_plot.png"),
+  #                   content = function(file){
+  #                     ggsave(file, 
+  #                            plot_out(), 
+  #                            device = "png", 
+  #                            height = 300,
+  #                            width = 400, 
+  #                            units = "mm")})
+  # 
+  # 
+  #### Analysis ################################################################
+  
+  
+  
   cmp_name <- reactive({
     input[["compound"]]
   })
   
-  output[["download_png"]] <- 
-    downloadHandler(filename = function() paste0(cmp_name(), "_plot.png"),
-                    content = function(file){
-                      ggsave(file, 
-                             plot_out(), 
-                             device = "png", 
-                             height = 300,
-                             width = 400, 
-                             units = "mm")})
   
-  shapiro_res <- reactive({
-    
-    if(groups_ok[["is_ok"]]) {
-      
-      group_label <- unique(data_prepared()[["group_label"]])
-      
-      if("Shapiro–Wilk test" %in% input[["tests"]]) {
-        
-        lapply(group_label, function(ith_group) {
-          prediction_percentage <- 0
-          
-          withProgress(message = paste0("Shapiro-Wilk (group ", ith_group, "):"),
-                       value = 0, {
-                         
-                         shapiro_res_raw <- lapply(compounds(), function(ith_compound) {
-                           
-                           tmp_dat <- data_prepared() %>% 
-                             filter(group_label == ith_group, Compound == ith_compound) %>%
-                             pull(value)
-                           
-                           prediction_percentage <<- prediction_percentage + 1/length(compounds())*100
-                           incProgress(1/length(compounds()), 
-                                       detail = paste0(round(prediction_percentage, 0), 
-                                                       "% compounds"))
-                           
-                           tryCatch({
-                             shapiro.test(tmp_dat) %>%
-                               getElement("p.value") %>%
-                               data.frame(group_label = ith_group, 
-                                          Compound = ith_compound, 
-                                          pval = .)
-                           }, error = function(cond) {
-                             return(data.frame(group_label = ith_group, 
-                                               Compound = ith_compound, 
-                                               pval = NA))
-                           })
-                         })
-                       })
-          bind_rows(shapiro_res_raw)
-        }) %>%
-          bind_rows() %>%
-          group_by(group_label) %>% 
-          mutate(adjusted_pval = p.adjust(pval, method = "BH"),
-                 transformation = input[["transform"]])
-        
-      } else {
-        return("Not performed")
-      }
-      
-    } else {
-      return("Invalid groups!")
-    }
-  })
-  
-  shapiro_out <- reactive({
-    if(is.data.frame(shapiro_res())) {
-      shapiro_res() %>% 
-        filter(Compound == input[["compound"]]) %>% 
-        select(-Compound)
-    } else {
-      
-      shapiro_res()
-    }
-  })
-  
-  output[["shapiro"]] <- renderTable({
-    shapiro_out()
-  })
   
   comparison_tests <- reactive({
     
@@ -599,7 +715,6 @@ server <- function(input, output, session) {
       filter(Compound == input[["compound"]]) %>% 
       select(-Compound)
   })
-  
   
   
   

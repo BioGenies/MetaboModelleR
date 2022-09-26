@@ -1,5 +1,6 @@
 
 
+
 ui <- navbarPage(id = "tabs",
                  title = "MetaboModelleR",
                  tabPanel("Data", 
@@ -28,6 +29,9 @@ ui <- navbarPage(id = "tabs",
                           verbatimTextOutput("error_compound"),
                           tableOutput("data_selected")
                  ),
+                 
+                 ###############################################################
+                 
                  tabPanel("Groups", 
                           tags$style(HTML('table.dataTable tr.selected td, table.dataTable td.selected {background-color: #C1E1CE !important;}')),
                           column(4, 
@@ -44,11 +48,6 @@ ui <- navbarPage(id = "tabs",
                                  checkboxInput("paired", "Paired", FALSE),
                                  br(),
                                  h3("Set another parameters:"),
-                                 radioButtons(inputId = "transform",
-                                              label = "Choose transformation:",
-                                              choices = c("None", 
-                                                          "Logarithm", 
-                                                          "Inverse hyperbolic sine")),
                                  checkboxGroupInput("tests", 
                                                     "Choose tests to perform",
                                                     choices = c("Shapiro–Wilk test",
@@ -70,6 +69,45 @@ ui <- navbarPage(id = "tabs",
                           column(4)
                           
                  ),
+                 
+                 ###############################################################
+                 
+                 tabPanel("Distribution", 
+                          h3("Here, you can apply some transformations to the data."),
+                          column(4,
+                                 DT::dataTableOutput("transformation_df")),
+                          column(8,
+                                 radioButtons(inputId = "transform",
+                                              label = "Choose transformation:",
+                                              choices = c("None",
+                                                          "Logarithm",
+                                                          "Square-Root",
+                                                          "Reciprocal",
+                                                          "Inverse hyperbolic sine")),
+                                 actionButton(inputId = "apply_transformation", 
+                                              label = "Apply!"),
+                                 plotOutput("dist_plot")),
+                          
+                          
+
+                          
+                    
+
+                          # column(12, 
+                          #        h3("Normality"),
+                          #        "Shapiro-Wilk Normality Test:",
+                          #        tableOutput("shapiro")
+                          # ),
+                          # br(),
+                          # downloadButton("download_png", "Download png"),
+                          # br(),
+                          # br(),
+                          # plotOutput("plot_raw_data"),
+                          
+                 ),
+                 
+                 ###############################################################
+                 
                  tabPanel("Analysis", 
                           tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "progress.css")),
                           column(12, selectInput("compound", 
@@ -79,24 +117,16 @@ ui <- navbarPage(id = "tabs",
                                  h3("Data statistics"),
                                  tableOutput("stat")
                           ),
-                          column(12, 
-                                 h3("Normality"),
-                                 "Shapiro-Wilk Normality Test:",
-                                 tableOutput("shapiro")
-                          ),
                           h3("Between groups comparison"),
                           tableOutput("tests"),
                           br(),
                           br(),
-                          plotOutput("dist_plot"),
-                          br(),
-                          downloadButton("download_png", "Download png"),
-                          br(),
-                          br(),
-                          plotOutput("plot_raw_data"),
                           br(),
                           br(),
                  ),
+                 
+                 ###############################################################
+                 
                  tabPanel("Summary",
                           selectInput("group_case", 
                                       "Select case group:", 
@@ -120,6 +150,9 @@ ui <- navbarPage(id = "tabs",
                           br(),
                           br()
                  ),
+                 
+                 ###############################################################
+                 
                  tabPanel("Download report",
                           h3("You can download a PDF file with the analysis"),
                           h5("For one compound:"),
