@@ -1,4 +1,4 @@
-library(MetaboModelleR)
+library(easyR)
 library(readxl)
 library(dplyr)
 library(tidyr)
@@ -35,8 +35,8 @@ server <- function(input, output, session) {
     file <- input[["data"]]
     ext <- tools::file_ext(file[["datapath"]])
     
-    validate(need(ext == "xlsx", "Please upload a xlsx file"),
-             need(input[["data"]], "Please upload data"))
+    req(file)
+    validate(need(ext == "xlsx", "Please upload a xlsx file"))
     
     sheets[["sheets"]] <- readxl::excel_sheets(file[["datapath"]])
     
@@ -97,8 +97,6 @@ server <- function(input, output, session) {
   #### Groups ##################################################################
   
   output[["group_dt"]] <- DT::renderDataTable({
-    validate(need(rv_df[["group_df"]], "Please upload data"))
-    
     rv_df[["group_df"]] %>% 
       DT::datatable(editable = FALSE, 
                     options = list(paging = FALSE),
@@ -133,21 +131,6 @@ server <- function(input, output, session) {
     }
   })
   
-  data_prepared <- reactive({
-    
-    switch(input[["transform"]],
-           None = {
-             data_prepared_tmp()
-           },
-           Logarithm = {
-             data_prepared_tmp() %>% 
-               mutate(value = log(value))
-           },
-           `Inverse hyperbolic sine` = {
-             data_prepared_tmp() %>% 
-               mutate(value = asinh(value))
-           })
-  })
   
   compounds <- reactive({
     unique(data_prepared()[["Compound"]])
@@ -294,25 +277,25 @@ server <- function(input, output, session) {
   
   
   plot_out <- reactive({
-
+    
     dat <- data_transformed_one_cmp()
-
+    
     group_label <- unique(dat[["group_label"]])
-
+    
     hist <- ggplot(dat, aes(x = value, fill = group_label)) +
       geom_histogram() +
       xlab("") +
       ggtitle("Histogram")
-
+    
     qqplot <- ggplot(dat, aes(sample = value, color = group_label)) +
       stat_qq() +
       stat_qq_line() +
       ggtitle("Quantile-quantile chart")
-
+    
     boxplot <- ggplot(dat, aes(x = "", y = value, fill = group_label)) +
       geom_boxplot() +
       ggtitle("Boxplot")
-
+    
     ((hist + qqplot) * facet_wrap(~ group_label, ncol = 1, scales = "free") + boxplot)*
       theme(legend.position = "bottom") +
       plot_annotation(paste0("Compound ", transformed_compound(), ". Transformation ", input[["transform"]]))
@@ -439,7 +422,7 @@ server <- function(input, output, session) {
   # })
   # 
   # 
-
+  
   # 
   # output[["download_png"]] <- 
   #   downloadHandler(filename = function() paste0(cmp_name(), "_plot.png"),
