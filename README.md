@@ -1,4 +1,8 @@
-## Install MetaboModelleR
+### MetaboModelleR web server
+
+TODO
+
+### Running MetaboModelleR locally
 
 Execute following commands in the R console:
 
@@ -11,9 +15,6 @@ See the example below:
 
 <img src="https://raw.githubusercontent.com/michbur/easyR/main/inst/additional-figures/r-console.png" alt="rconsole" style="height: 200px;"/>
 
-
-## Run MetaboModelleR
-
 If you have successfully installed the package, run the GUI in your web browser using:
 
 ``` r
@@ -22,6 +23,6 @@ MetaboModelleR::run_MetaboModelleR()
 
 Remember that the column with compound names in your data should be named **Compound**.
 
-## Frequently asked questions
+### Citation (coming soon)
 
-1. 
+Grzesiak K., Ciborowski M., Burdukiewicz M. (2022). MetaboModeller: efficient processing of GC-MS and LC-MS data. XXXYYY, doi.
