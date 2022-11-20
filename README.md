@@ -26,3 +26,8 @@ Remember that the column with compound names in your data should be named **Comp
 ### Citation (coming soon)
 
 Grzesiak K., Ciborowski M., Burdukiewicz M. (2022). MetaboModeller: efficient processing of GC-MS and LC-MS data. XXXYYY, doi.
+
+### Acknowledgements
+
+This project was supported by ...
+
