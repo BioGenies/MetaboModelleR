@@ -1,8 +1,19 @@
-
+library(MetaboModelleR)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(patchwork)
+library(stringr)
+library(DT)
+library(shinycssloaders)
+library(impute)
 
 
 ui <- navbarPage(id = "tabs",
                  title = "MetaboModelleR",
+                 tabPanel("About",
+                          includeMarkdown("MetaboModelleR.md")),
                  tabPanel("Data", 
                           tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "style.css")),
                           tags$style(".shiny-notification {
