@@ -1,4 +1,3 @@
-
 library(shiny)
 library(metaboR)
 library(shinythemes)
@@ -8,17 +7,6 @@ library(DT)
 library(shinycssloaders)
 
 source("supplementary_shiny.R")
-
-
-custom_datatable <- function(dat) {
-  DT::datatable(dat,
-                editable = FALSE, 
-                options = list(paging = FALSE, 
-                               scrollX = TRUE,
-                               scrollY = 650,
-                               autoWidth = TRUE))
-}
-
 
 
 ui <- navbarPage(theme = shinytheme("flatly"),
@@ -47,12 +35,7 @@ ui <- navbarPage(theme = shinytheme("flatly"),
                                  h3("Biocrates data"),
                                  fileInput("biocrates_path", "Choose .xlsx file:",
                                            multiple = FALSE,
-                                           accept = c(".xlsx")),
-                                 h5("The data should:"),
-                                 HTML("- Pellentesque lobortis ante ut cons <br/>
-                                 - Sed luctus, orci nec rutrum tempor <br/>
-                                 -  In varius erat sed finibus mollis <br/>
-                                 - Nunc ornare, neque at feugiat pharetra <br/>")
+                                           accept = c(".xlsx"))
                           ),
                           column(6, 
                                  align = "center",
@@ -60,17 +43,12 @@ ui <- navbarPage(theme = shinytheme("flatly"),
                                  h3("Clinical data"),
                                  fileInput("clinical_path", "Choose .xlsx file:",
                                            multiple = FALSE,
-                                           accept = c(".xlsx")),
-                                 h5("The data should:"),
-                                 HTML("- Pellentesque lobortis ante ut cons <br/>
-                                 - Sed luctus, orci nec rutrum tempor <br/>
-                                 -  In varius erat sed finibus mollis <br/>
-                                 - Nunc ornare, neque at feugiat pharetra <br/>"),
+                                           accept = c(".xlsx"))
                           ),
                           column(12, 
                                  align = "center",
-                                 style = "background-color:#C3D2D5;padding:10px;margin-bottom:10px",
-                                 actionButton("read_data", "Load files", 
+                                 style = "background-color:#C3D2D5;padding:10px;margin-bottom:10px;",
+                                 actionButton("read_data_btn", "Load files", 
                                               width = "300px", 
                                               icon = icon("file-lines")),
                                  br()),
@@ -85,7 +63,46 @@ ui <- navbarPage(theme = shinytheme("flatly"),
                                  )
                           ),
                  ),
-                 tabPanel("LOD",
+                 navbarMenu("< LOD",
+                            tabPanel("Remove sparse metabolites",
+                                     column(3, 
+                                            offset = 1,
+                                            align = "center",
+                                            style = "background-color:#C3D2D5;padding:10px;margin-bottom:10px;",
+                                            numericInput("LOD_thresh", 
+                                                         "Select maximum ratio of <LOD allowed for each metabolite and click `remove` button!",
+                                                         value = 0.3,
+                                                         min = 0,
+                                                         max = 1,
+                                                         step = 0.01),
+                                            actionButton("remove_btn", 
+                                                         label = "Remove!")
+                                     ),
+                                     column(5, 
+                                            offset = 1, 
+                                            shinycssloaders::withSpinner(
+                                              DT::dataTableOutput("LOD_data")
+                                            )
+                                     )
+                            ),
+                            tabPanel("Complete < LOD",
+                                     column(3, 
+                                            offset = 1,
+                                            style = "background-color:#C3D2D5;padding:10px;margin-bottom:10px;",
+                                            h4("Complete LOD values based on the table below."),
+                                            actionButton("complete_btn", 
+                                                         label = "Complete!"),
+                                            br(),
+                                            shinycssloaders::withSpinner(
+                                              DT::dataTableOutput("LOD_table")
+                                            )
+                                     ),
+                                     column(8, 
+                                            shinycssloaders::withSpinner(
+                                              DT::dataTableOutput("CV_data")
+                                            )
+                                     )
+                            )
                  )
                  
 )
@@ -94,7 +111,8 @@ server <- function(input, output, session) {
   
   dat <- reactiveValues()
   
-  observeEvent(input[["read_data"]], {
+  ##### loading data
+  observeEvent(input[["read_data_btn"]], {
     dat <- read_data_app(input, dat)
   })
   
@@ -108,6 +126,50 @@ server <- function(input, output, session) {
   output[["biocrates_data"]] <-  DT::renderDataTable({
     req(dat[["biocrates_data"]])
     custom_datatable(dat[["biocrates_data"]])
+  })
+  
+  # removing LOD 
+  observeEvent(input[["remove_btn"]], {
+    dat[["removed_LOD"]] <- remove_sparse_metabolites(dat[["biocrates_data"]], 
+                                                      LOD_threshold = input[["LOD_thresh"]])
+    dat[["CV_data"]] <- dat[["removed_LOD"]]
+  })
+  
+  
+  output[["LOD_data"]] <- DT::renderDataTable({
+    req(dat[["removed_LOD"]])
+    LOD_display <- unique(melt(dat[["removed_LOD"]],
+                               id.vars = c("Plate Bar Code", "Sample_ID", "Sample Type"),
+                               variable.name = "Compound",
+                               value.name = "Value")[ 
+                                 , -c("Plate Bar Code", "Sample_ID", "Sample Type")
+                               ][, `% < LOD` := round(mean(Value == "< LOD"), 3), by = Compound][
+                                 , -c("Value")
+                               ])
+    custom_datatable(LOD_display, 
+                     scrollY = 600,
+                     paging = FALSE)
+  })
+  
+  # completed LOD table
+  observeEvent(input[["complete_btn"]], {
+    dat[["CV_data"]] <- handle_LOD(dat[["removed_LOD"]])
+  })
+  
+  output[["LOD_table"]] <- DT::renderDataTable({
+    req(dat[["biocrates_data"]])
+    
+    LOD_table <- attr(dat[["biocrates_data"]], "LOD_table")
+    custom_datatable(LOD_table, 
+                     scrollY = 550,
+                     paging = FALSE)
+  })
+  
+  output[["CV_data"]] <- DT::renderDataTable({
+    req(dat[["CV_data"]])
+    
+    custom_datatable(dat[["CV_data"]], 
+                     scrollY = 550)
   })
   
 }
