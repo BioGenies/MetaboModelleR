@@ -207,6 +207,14 @@
         "lazyeval"
       ]
     },
+    "data.table": {
+      "Package": "data.table",
+      "Version": "1.14.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "36b67b5adf57b292923f5659f5f0c853",
+      "Requirements": []
+    },
     "desc": {
       "Package": "desc",
       "Version": "1.4.2",
