@@ -28,7 +28,6 @@ read_data_app <- function(input, dat) {
     biocrates_data <- read_biocrates(path = file[["datapath"]], 
                                      clinical_data = clinical_data)
     dat[["biocrates_data"]] <- biocrates_data
-    dat[["removed_LOD"]] <- biocrates_data
   }
   
   dat[["clinical_data"]] <- clinical_data
@@ -39,6 +38,7 @@ read_data_app <- function(input, dat) {
 custom_datatable <- function(dat, paging = TRUE, scrollY = 380) {
   DT::datatable(dat,
                 editable = FALSE, 
+                selection = list(selectable = FALSE),
                 options = list(paging = paging, 
                                scrollX = TRUE,
                                scrollY = scrollY,
