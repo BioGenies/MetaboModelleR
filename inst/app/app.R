@@ -6,6 +6,7 @@ library(data.table)
 library(DT)
 library(shinycssloaders)
 library(shinyWidgets)
+library(openxlsx)
 
 source("supplementary_shiny.R")
 
@@ -154,7 +155,64 @@ ui <- navbarPage(theme = shinytheme("flatly"),
                                    DT::dataTableOutput("QC_table")
                                  )
                           )
-                 )
+                 ),
+                 navbarMenu("Statistical analysis",
+                            tabPanel("Settings",
+                                     column(4,
+                                            style = "background-color:#C3D2D5;padding:10px;margin-bottom:10px;",
+                                            h4("Provide information about groups"),
+                                            selectInput("grouping_var",
+                                                        label = "Select group variable",
+                                                        choices = c(),
+                                                        selected = c()),
+                                            selectInput("control",
+                                                        label = "Select control name",
+                                                        choices = c(),
+                                                        selected = c()),
+                                            shinycssloaders::withSpinner(
+                                              DT::dataTableOutput("summary_groups")
+                                            )
+                                     ),
+                                     column(6, offset = 1,
+                                            shinycssloaders::withSpinner(
+                                              DT::dataTableOutput("clinical_data_view")
+                                            )
+                                     )
+                            ),
+                            tabPanel("Data Summary",
+                                     column(4,
+                                            style = "background-color:#C3D2D5;padding:10px;margin-bottom:10px;",
+                                            selectInput("test_group",
+                                                        label = "Select group",
+                                                        choices = c(),
+                                                        selected = c())
+                                     ),
+                                     column(6, offset = 1,
+                                            shinycssloaders::withSpinner(
+                                              DT::dataTableOutput("summary_table")
+                                            )
+                                     )
+                            ),
+                            # tabPanel("Data distribution"),
+                            # tabPanel("Normality"),
+                            tabPanel("Statistical analysis",
+                                     column(4,
+                                            style = "background-color:#C3D2D5;padding:10px;margin-bottom:10px;",
+                                            selectInput("test_group_stat",
+                                                        label = "Select group",
+                                                        choices = c(),
+                                                        selected = c()),
+                                            actionButton("calculate_statistics", 
+                                                         label = "Calculate!")
+                                     ),
+                                     column(6, 
+                                            DT::dataTableOutput("results")
+                                     )
+                            )
+                 ),
+                 tabPanel("Download",
+                          actionButton('download_excel', 'Download Excel file'))
+                 
                  
 )
 
@@ -211,19 +269,6 @@ server <- function(input, output, session) {
                      scrollY = 600,
                      paging = FALSE)
   })
-  
-  # output[["LOD_data"]] <- DT::renderDataTable({
-  #   sparse_dat <- data_sparse_metabolites()
-  #   to_remove <- sparse_dat[`% < LOD` > input[["LOD_thresh"]], Compound]
-  #   formatStyle(
-  #     custom_datatable(sparse_dat, 
-  #                      scrollY = 600,
-  #                      paging = FALSE), 
-  #     'Compound',
-  #     target = "row",
-  #     backgroundColor = styleEqual(to_remove, c("darksalmon"))
-  #   )
-  # })
   
   output[["sparse_to_remove"]] <- renderUI({
     metabolites_sparcity <- data_sparse_metabolites()
@@ -336,9 +381,121 @@ server <- function(input, output, session) {
                                               style = "color: white"),
                                  no = tags$i(class = "fa fa-square-o", 
                                              style = "color: white")
-                               )
-    )
+                               ))
   })
+  
+  # Settings 
+  
+  output[["clinical_data_view"]] <- DT::renderDataTable({
+    req(dat[["clinical_data"]])
+    
+    updateSelectInput(session, "grouping_var", 
+                      choices = colnames(dat[["clinical_data"]]),
+                      selected = NULL)
+    
+    clinical_data <- dat[["clinical_data"]]
+    cols1 <- colnames(clinical_data)[sapply(clinical_data, is.numeric)]
+    custom_datatable(clinical_data[, (cols1) := round(.SD, 2), .SDcols = cols1],
+                     scrollY = 550)
+  })
+  
+  
+  output[["summary_groups"]] <-  DT::renderDataTable({
+    req(dat[["clinical_data"]])
+    req(input[["grouping_var"]])
+    
+    groups <- dat[["clinical_data"]][, get(input[["grouping_var"]])]
+    
+    gr_summary <- dat[["clinical_data"]][ 
+      , .(count = .N), by = get(input[["grouping_var"]])
+    ]
+    setnames(gr_summary, old = c("get", "count"), new = c("Group", "Count"))
+    
+    updateSelectInput(session, "control", 
+                      choices = gr_summary[, Group],
+                      selected = input[["control"]])
+    
+    updateSelectInput(session, "test_group", 
+                      choices = setdiff(gr_summary[, Group], input[["control"]]),
+                      selected = setdiff(gr_summary[, Group], input[["control"]])[1])
+    
+    updateSelectInput(session, "test_group_stat", 
+                      choices =  setdiff(gr_summary[, Group], input[["control"]]),
+                      selected = input[["test_group"]])
+    
+    formatStyle(
+      custom_datatable(gr_summary,
+                       scrollY = 300),
+      'Group',
+      target = "row",
+      backgroundColor = styleEqual(input[["control"]], 
+                                   c("#8ad49d"))
+    )
+    
+  })
+  
+  # Statistics
+  
+  output[["summary_table"]] <- DT::renderDataTable({
+    req(input[["grouping_var"]])
+    req(input[["control"]])
+    
+    group_col <- input[["grouping_var"]]
+    control <- input[["control"]]
+    
+    clinical_dat <- dat[["clinical_data"]]
+    subject_id <- attr(clinical_dat, "subject_id")
+    
+    if(subject_id %in% colnames(clinical_dat))
+      setnames(clinical_dat, old = subject_id, new = "Sample_ID")
+    
+    dat[["complete_data"]] <- merge.data.table(dat[["processed_data"]], clinical_dat, by = "Sample_ID")
+    
+    dat[["summary_table"]] <- dat[["complete_data"]][, .(Average = mean(Value)), by = c("Compound", group_col)]
+    
+    dat[["summary_table"]][
+      , `:=`(p_change = 100 * (Average - unique(Average[get(group_col) == control])) / unique(Average[get(group_col) == control]),
+             fold_change = Average/unique(Average[get(group_col) == control])),
+      by = Compound
+    ]
+    
+    cols1 <- colnames(dat[["summary_table"]])[sapply(dat[["summary_table"]], is.numeric)]
+    custom_datatable(dat[["summary_table"]][get(group_col) == input[["test_group"]]][, (cols1) := round(.SD, 2), .SDcols = cols1],
+                     scrollY = 550)
+    
+  })
+  
+  
+  # observeEvent(input[["calculate_statistics"]], {
+  #   req(input[["grouping_var"]])
+  #   req(input[["control"]])
+  #   browser()
+  #   dat[["clinical_data"]] %>%  select(Rodzaj) %>%  table()
+  #   
+  #   dat[["complete_data"]][ , ..cols] %>%  select(Sample_ID, Rodzaj) %>%  unique() %>%  group_by(Rodzaj) %>%   summarise(n = n())
+  #   
+  #   cols <-  c("Sample_ID", "Compound", "Value", input[["grouping_var"]])
+  #   
+  #   data_tmp <- dat[["complete_data"]][ , ..cols]
+  #   
+  #   data_tmp[, list(p_value = .N), by = c(input[["grouping_var"]], "Compound")]
+  #   
+  # 
+  #   
+  #   
+  #   
+  # })
+  
+  
+  observeEvent(input[["download_excel"]], {
+    wb_file <- createWorkbook()
+    for (i in setdiff(names(dat), "to_remove")) {
+      addWorksheet(wb_file, i )
+      writeData(wb_file, i, dat[[i]])
+    }
+    saveWorkbook(wb_file, "results.xlsx", overwrite = TRUE)
+  })
+  
 }
 
 

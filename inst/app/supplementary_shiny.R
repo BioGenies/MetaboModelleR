@@ -45,3 +45,7 @@ custom_datatable <- function(dat, paging = TRUE, scrollY = 380) {
                                pageLength = 15,
                                searching = FALSE))
 }
+
+
+
+
