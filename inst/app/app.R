@@ -237,6 +237,15 @@ server <- function(input, output, session) {
   observeEvent(input[["complete_btn"]], {
     dat[["CV_data"]] <- handle_LOD(dat[["removed_LOD"]])
     dat[["CV_table"]] <- attr(dat[["CV_data"]], "CV_table")
+    dat[["to_remove"]] <- as.vector(dat[["CV_table"]][`QC Level 2` >= input[["CV_thresh"]], Compound])
+    
+    updateCheckboxGroupButtons(session, inputId = "select_metabolites", 
+                               choices = dat[["to_remove"]],
+                               checkIcon = list(
+                                 yes = tags$i(class = "fa fa-check-square", 
+                                              style = "color: white"),
+                                 no = tags$i(class = "fa fa-square-o", 
+                                             style = "color: white")))
   })
   
   observeEvent(input[["complete_undo_btn"]], {
@@ -261,11 +270,10 @@ server <- function(input, output, session) {
                      scrollY = 600)
   })
   
-  # completed LOD table
+  # remove CV
   
   output[["QC_table"]] <- DT::renderDataTable({
     req(dat[["CV_table"]])
-    req(input[["CV_thresh"]])
     
     formatStyle(
       custom_datatable(dat[["CV_table"]][, lapply(.SD, round, 3), Compound], 
@@ -278,11 +286,11 @@ server <- function(input, output, session) {
     )
   })
   
-  observeEvent(input[["CV_thresh"]] & input[["navbar_id"]] == "Quality control", {
+  observeEvent(input[["CV_thresh"]] & input[["undo_CV_btn"]] & input[["navbar_id"]] == "Quality control", {
     req(dat[["CV_data"]])
     req(input[["CV_thresh"]])
     
-    to_remove <- get_CV_to_remove(dat[["CV_data"]], CV_threshold = input[["CV_thresh"]])
+    to_remove <- as.vector(dat[["CV_table"]][`QC Level 2` >= input[["CV_thresh"]], Compound])
     dat[["to_remove"]] <- to_remove
     selected <- input[["select_metabolites"]]
     
@@ -300,7 +308,6 @@ server <- function(input, output, session) {
     req(dat[["CV_table"]])
     req(dat[["CV_data"]])
     req(dat[["to_remove"]])
-    req(input[["select_metabolites"]])
     
     to_remove <- setdiff(dat[["to_remove"]], input[["select_metabolites"]])
     dat[["processed_data"]] <- remove_high_CV(dat[["CV_data"]], to_remove)
@@ -314,7 +321,6 @@ server <- function(input, output, session) {
                                               style = "color: white"),
                                  no = tags$i(class = "fa fa-square-o", 
                                              style = "color: white")))
-    
   })
   
   observeEvent(input[["undo_CV_btn"]], {
