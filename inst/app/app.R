@@ -195,20 +195,20 @@ ui <- navbarPage(theme = shinytheme("flatly"),
                             ),
                             # tabPanel("Data distribution"),
                             # tabPanel("Normality"),
-                            tabPanel("Statistical analysis",
-                                     column(4,
-                                            style = "background-color:#C3D2D5;padding:10px;margin-bottom:10px;",
-                                            selectInput("test_group_stat",
-                                                        label = "Select group",
-                                                        choices = c(),
-                                                        selected = c()),
-                                            actionButton("calculate_statistics", 
-                                                         label = "Calculate!")
-                                     ),
-                                     column(6, 
-                                            DT::dataTableOutput("results")
-                                     )
-                            )
+                            # tabPanel("Statistical analysis",
+                            #          column(4,
+                            #                 style = "background-color:#C3D2D5;padding:10px;margin-bottom:10px;",
+                            #                 selectInput("test_group_stat",
+                            #                             label = "Select group",
+                            #                             choices = c(),
+                            #                             selected = c()),
+                            #                 actionButton("calculate_statistics", 
+                            #                              label = "Calculate!")
+                            #          ),
+                            #          column(6, 
+                            #                 DT::dataTableOutput("results")
+                            #          )
+                            # )
                  ),
                  tabPanel("Download",
                           actionButton('download_excel', 'Download Excel file'))
@@ -490,6 +490,10 @@ server <- function(input, output, session) {
   observeEvent(input[["download_excel"]], {
     wb_file <- createWorkbook()
     for (i in setdiff(names(dat), "to_remove")) {
+      
+      if(i == "CV_data")
+        dat[[i]] <- dcast(dat[[i]], Sample_ID + `Sample Type` ~Compound, value.var = "Value")
+      
       addWorksheet(wb_file, i )
       writeData(wb_file, i, dat[[i]])
     }
